@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useStore } from '../store'
 import { validateApiKey } from '../api'
 
-export default function ApiKeySetup() {
+export default function ApiKeySetup({ onDone }) {
   const { setApiKey } = useStore()
   const [key, setKey] = useState('')
   const [loading, setLoading] = useState(false)
@@ -17,6 +17,7 @@ export default function ApiKeySetup() {
     try {
       await validateApiKey(trimmed)
       setApiKey(trimmed)
+      onDone?.()
     } catch {
       setError('Could not verify that key. Double-check it and try again.')
     } finally {

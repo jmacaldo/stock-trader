@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useStore } from './store'
-import { initSession, loadData, syncAccount } from './db'
+import { supabase } from './supabase'
+import { loadData, syncAccount } from './db'
 import Header from './components/Header'
 import Search from './components/Search'
 import StockQuote from './components/StockQuote'
@@ -8,42 +9,68 @@ import TradePanel from './components/TradePanel'
 import Portfolio from './components/Portfolio'
 import History from './components/History'
 import ApiKeySetup from './components/ApiKeySetup'
+import AuthScreen from './components/AuthScreen'
 import LoadingScreen from './components/LoadingScreen'
 
+// 'loading' | 'auth' | 'setup' | 'app'
 export default function App() {
+  const [phase, setPhase] = useState('loading')
   const [quote, setQuote] = useState(null)
   const [portfolioValue, setPortfolioValue] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const { apiKey, setUserId, hydrateFromDb } = useStore()
+  const { setUserId, hydrateFromDb } = useStore()
+
+  const loadUserData = async (userId) => {
+    setUserId(userId)
+    const data = await loadData(userId)
+    if (data.account) {
+      hydrateFromDb(data)
+    } else {
+      // First sign-in: start with clean defaults, persist to DB
+      useStore.setState({ balance: 10000, startingBalance: 10000, portfolio: {}, trades: [] })
+      const { apiKey } = useStore.getState()
+      await syncAccount(userId, 10000, 10000, apiKey)
+    }
+  }
+
+  const handleAuth = async (userId) => {
+    setPhase('loading')
+    try {
+      await loadUserData(userId)
+      const { apiKey } = useStore.getState()
+      setPhase(apiKey ? 'app' : 'setup')
+    } catch (err) {
+      console.error('Failed to load account:', err)
+      setPhase('auth')
+    }
+  }
 
   useEffect(() => {
-    const init = async () => {
-      try {
-        const userId = await initSession()
-        setUserId(userId)
-
-        const data = await loadData(userId)
-
-        if (data.account) {
-          // Returning user — load their data from Supabase
-          hydrateFromDb(data)
-        } else {
-          // First visit — create the account row with current local defaults
-          const { balance, startingBalance, apiKey: localKey } = useStore.getState()
-          await syncAccount(userId, balance, startingBalance, localKey)
-        }
-      } catch (err) {
-        // DB unavailable — app still works from localStorage
-        console.error('DB init failed, falling back to local state:', err)
-      } finally {
-        setLoading(false)
+    // Check for an existing session on mount
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        await handleAuth(session.user.id)
+      } else {
+        setPhase('auth')
       }
-    }
-    init()
+    })
+
+    // Keep phase in sync when auth state changes externally (sign out, token expiry)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        useStore.setState({ userId: null, portfolio: {}, trades: [], balance: 10000, startingBalance: 10000 })
+        setPhase('auth')
+        setQuote(null)
+      }
+    })
+    return () => subscription.unsubscribe()
   }, [])
 
-  if (loading) return <LoadingScreen />
-  if (!apiKey) return <ApiKeySetup />
+  // Called by ApiKeySetup after the key is saved
+  const handleKeySet = () => setPhase('app')
+
+  if (phase === 'loading') return <LoadingScreen />
+  if (phase === 'auth') return <AuthScreen onAuth={handleAuth} />
+  if (phase === 'setup') return <ApiKeySetup onDone={handleKeySet} />
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
@@ -53,7 +80,6 @@ export default function App() {
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
           <div className="lg:col-span-2 space-y-4">
             <Search onSelect={setQuote} />
-
             {quote ? (
               <>
                 <StockQuote quote={quote} onUpdate={setQuote} onClose={() => setQuote(null)} />

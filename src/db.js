@@ -1,15 +1,5 @@
 import { supabase } from './supabase'
 
-// Returns the userId — restores existing session or creates a new anonymous one
-export async function initSession() {
-  const { data: { session } } = await supabase.auth.getSession()
-  if (session?.user) return session.user.id
-
-  const { data, error } = await supabase.auth.signInAnonymously()
-  if (error) throw error
-  return data.user.id
-}
-
 // Load all data for a user from Supabase
 export async function loadData(userId) {
   const [{ data: account }, { data: positions }, { data: trades }] = await Promise.all([

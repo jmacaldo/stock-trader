@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useStore } from '../store'
+import { supabase } from '../supabase'
 
 const usd = (n) =>
   (n ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
@@ -8,11 +9,13 @@ export default function Header({ portfolioValue }) {
   const { balance, startingBalance, reset, clearApiKey } = useStore()
   const [showReset, setShowReset] = useState(false)
   const [newBalance, setNewBalance] = useState('')
+  const [userEmail, setUserEmail] = useState(null)
 
-  const totalValue = balance + (portfolioValue ?? 0)
-  const pnl = totalValue - startingBalance
-  const pnlPct = startingBalance > 0 ? (pnl / startingBalance) * 100 : 0
-  const isUp = pnl >= 0
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => setUserEmail(user?.email ?? null))
+  }, [])
+
+  const handleSignOut = () => supabase.auth.signOut()
 
   const handleReset = () => {
     const amount = parseFloat(newBalance) || startingBalance
@@ -22,6 +25,11 @@ export default function Header({ portfolioValue }) {
       setNewBalance('')
     }
   }
+
+  const totalValue = balance + (portfolioValue ?? 0)
+  const pnl = totalValue - startingBalance
+  const pnlPct = startingBalance > 0 ? (pnl / startingBalance) * 100 : 0
+  const isUp = pnl >= 0
 
   return (
     <>
@@ -44,24 +52,35 @@ export default function Header({ portfolioValue }) {
             <div className="w-px h-8 bg-gray-800" />
             <Stat
               label="Total P&L"
-              value={`${isUp ? '+' : ''}${usd(pnl)}  (${isUp ? '+' : ''}${pnlPct.toFixed(2)}%)`}
+              value={`${isUp ? '+' : ''}${usd(pnl)} (${isUp ? '+' : ''}${pnlPct.toFixed(2)}%)`}
               color={isUp ? 'text-emerald-400' : 'text-red-400'}
             />
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            {userEmail && (
+              <span className="hidden sm:block text-xs text-gray-600 max-w-[140px] truncate" title={userEmail}>
+                {userEmail}
+              </span>
+            )}
             <button
               onClick={() => setShowReset(true)}
               className="text-xs px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-gray-200 rounded-lg transition-colors border border-gray-700"
             >
-              Reset Account
+              Reset
             </button>
             <button
               onClick={clearApiKey}
               className="text-xs px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-600 hover:text-gray-400 rounded-lg transition-colors border border-gray-700"
-              title="Change API key"
+              title="Change Finnhub API key"
             >
               API Key
+            </button>
+            <button
+              onClick={handleSignOut}
+              className="text-xs px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-600 hover:text-red-400 rounded-lg transition-colors border border-gray-700"
+            >
+              Sign Out
             </button>
           </div>
         </div>
@@ -86,16 +105,10 @@ export default function Header({ portfolioValue }) {
               />
             </div>
             <div className="flex gap-2">
-              <button
-                onClick={handleReset}
-                className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2 rounded-lg text-sm font-semibold transition-colors"
-              >
+              <button onClick={handleReset} className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2 rounded-lg text-sm font-semibold transition-colors">
                 Reset
               </button>
-              <button
-                onClick={() => { setShowReset(false); setNewBalance('') }}
-                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg text-sm font-semibold transition-colors"
-              >
+              <button onClick={() => { setShowReset(false); setNewBalance('') }} className="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg text-sm font-semibold transition-colors">
                 Cancel
               </button>
             </div>
