@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useStore } from './store'
+import { initSession, loadData, syncAccount } from './db'
 import Header from './components/Header'
 import Search from './components/Search'
 import StockQuote from './components/StockQuote'
@@ -7,12 +8,41 @@ import TradePanel from './components/TradePanel'
 import Portfolio from './components/Portfolio'
 import History from './components/History'
 import ApiKeySetup from './components/ApiKeySetup'
+import LoadingScreen from './components/LoadingScreen'
 
 export default function App() {
   const [quote, setQuote] = useState(null)
   const [portfolioValue, setPortfolioValue] = useState(0)
-  const { apiKey } = useStore()
+  const [loading, setLoading] = useState(true)
+  const { apiKey, setUserId, hydrateFromDb } = useStore()
 
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const userId = await initSession()
+        setUserId(userId)
+
+        const data = await loadData(userId)
+
+        if (data.account) {
+          // Returning user — load their data from Supabase
+          hydrateFromDb(data)
+        } else {
+          // First visit — create the account row with current local defaults
+          const { balance, startingBalance, apiKey: localKey } = useStore.getState()
+          await syncAccount(userId, balance, startingBalance, localKey)
+        }
+      } catch (err) {
+        // DB unavailable — app still works from localStorage
+        console.error('DB init failed, falling back to local state:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    init()
+  }, [])
+
+  if (loading) return <LoadingScreen />
   if (!apiKey) return <ApiKeySetup />
 
   return (
