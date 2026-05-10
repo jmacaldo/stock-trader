@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { useStore } from './store'
 import { supabase } from './supabase'
 import { loadData, syncAccount } from './db'
@@ -8,6 +8,8 @@ import StockQuote from './components/StockQuote'
 import TradePanel from './components/TradePanel'
 import Portfolio from './components/Portfolio'
 import History from './components/History'
+
+const PortfolioChart = lazy(() => import('./components/PortfolioChart'))
 import ApiKeySetup from './components/ApiKeySetup'
 import AuthScreen from './components/AuthScreen'
 import LoadingScreen from './components/LoadingScreen'
@@ -94,6 +96,9 @@ export default function App() {
           </div>
 
           <div className="lg:col-span-3 space-y-4">
+            <Suspense fallback={null}>
+              <PortfolioChart />
+            </Suspense>
             <Portfolio onValueChange={setPortfolioValue} />
             <History />
           </div>
