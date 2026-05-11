@@ -11,6 +11,7 @@ import Portfolio from './components/Portfolio'
 import History from './components/History'
 
 const PortfolioChart = lazy(() => import('./components/PortfolioChart'))
+const MarketMovers = lazy(() => import('./components/MarketMovers'))
 import ApiKeySetup from './components/ApiKeySetup'
 import AuthScreen from './components/AuthScreen'
 import LoadingScreen from './components/LoadingScreen'
@@ -80,7 +81,7 @@ export default function App() {
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
           <Header portfolioValue={portfolioValue} />
 
-          <main className="max-w-7xl mx-auto p-4 lg:p-6">
+          <main className="max-w-7xl mx-auto p-4 lg:p-6 space-y-5">
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
               <div className="lg:col-span-2 space-y-4">
                 <Search onSelect={setQuote} />
@@ -105,6 +106,10 @@ export default function App() {
                 <History />
               </div>
             </div>
+
+            <Suspense fallback={null}>
+              <MarketMovers onSelect={setQuote} />
+            </Suspense>
           </main>
         </div>
       )}
