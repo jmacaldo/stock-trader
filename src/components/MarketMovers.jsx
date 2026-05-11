@@ -1,28 +1,30 @@
 import { useState, useEffect } from 'react'
-import { fetchQuote } from '../api'
+import { fetchQuote, fetchQuotes } from '../api'
 
-const SCREENER = 'https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved'
+const WATCHLIST = [
+  'AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA','JPM','V','UNH',
+  'XOM','JNJ','WMT','MA','PG','LLY','HD','CVX','MRK','ABBV',
+  'AVGO','COST','KO','ADBE','CSCO','BAC','CRM','NFLX','AMD','DIS',
+  'NKE','ORCL','INTC','QCOM','TXN','AMGN','GS','CAT','BA','GE',
+  'PLTR','COIN','SOFI','RIVN','LCID','MSTR','AMC','GME','HOOD','RBLX',
+]
 
-async function fetchScreener(scrId, count = 8) {
-  const res = await fetch(
-    `${SCREENER}?scrIds=${scrId}&count=${count}&formatted=false&lang=en-US&region=US`
-  )
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const json = await res.json()
-  const quotes = json.finance?.result?.[0]?.quotes
-  if (!quotes) throw new Error(json.finance?.error?.description ?? 'No data returned')
-  return quotes.map((q) => ({
-    symbol: q.symbol,
-    name: q.shortName ?? q.displayName ?? q.symbol,
-    price: q.regularMarketPrice ?? 0,
-    change: q.regularMarketChange ?? 0,
-    changePct: q.regularMarketChangePercent ?? 0,
-  }))
+async function fetchMovers(count = 8) {
+  const quotes = await fetchQuotes(WATCHLIST)
+  const valid = quotes.filter((q) => q.regularMarketChangePercent != null)
+  const sorted = [...valid].sort((a, b) => b.regularMarketChangePercent - a.regularMarketChangePercent)
+  return {
+    gainers: sorted.slice(0, count),
+    losers: sorted.slice(-count).reverse(),
+  }
 }
 
 function MoverRow({ q, isLoss, selecting, onSelect }) {
   const busy = selecting === q.symbol
   const clr = isLoss ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'
+  const change = q.regularMarketChange ?? 0
+  const changePct = q.regularMarketChangePercent ?? 0
+  const price = q.regularMarketPrice ?? 0
   return (
     <tr
       onClick={() => onSelect(q.symbol)}
@@ -33,20 +35,17 @@ function MoverRow({ q, isLoss, selecting, onSelect }) {
           {busy && (
             <div className="w-3 h-3 border border-gray-300 dark:border-gray-600 border-t-emerald-500 rounded-full animate-spin shrink-0" />
           )}
-          <div>
-            <div className="font-mono font-bold text-gray-900 dark:text-white text-xs">{q.symbol}</div>
-            <div className="text-xs text-gray-400 dark:text-gray-600 truncate max-w-[110px]">{q.name}</div>
-          </div>
+          <div className="font-mono font-bold text-gray-900 dark:text-white text-xs">{q.symbol}</div>
         </div>
       </td>
       <td className="px-3 py-2.5 text-right text-xs text-gray-700 dark:text-gray-300 tabular-nums">
-        ${q.price.toFixed(2)}
+        ${price.toFixed(2)}
       </td>
       <td className={`px-3 py-2.5 text-right text-xs tabular-nums font-semibold ${clr}`}>
-        {q.change >= 0 ? '+' : '−'}${Math.abs(q.change).toFixed(2)}
+        {change >= 0 ? '+' : '−'}${Math.abs(change).toFixed(2)}
       </td>
       <td className={`px-3 py-2.5 text-right text-xs tabular-nums font-bold ${clr}`}>
-        {q.changePct >= 0 ? '+' : ''}{q.changePct.toFixed(2)}%
+        {changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}%
       </td>
     </tr>
   )
@@ -79,7 +78,7 @@ export default function MarketMovers({ onSelect }) {
   const [losers, setLosers]   = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
-  const [sortBy, setSortBy]   = useState('pct') // 'pct' | 'price'
+  const [sortBy, setSortBy]   = useState('pct')
   const [updated, setUpdated] = useState(null)
   const [selecting, setSelecting] = useState(null)
 
@@ -87,10 +86,7 @@ export default function MarketMovers({ onSelect }) {
     setLoading(true)
     setError(null)
     try {
-      const [g, l] = await Promise.all([
-        fetchScreener('day_gainers'),
-        fetchScreener('day_losers'),
-      ])
+      const { gainers: g, losers: l } = await fetchMovers(8)
       setGainers(g)
       setLosers(l)
       setUpdated(new Date())
@@ -121,13 +117,16 @@ export default function MarketMovers({ onSelect }) {
   const sorted = (list, isLoss) =>
     [...list].sort((a, b) =>
       sortBy === 'pct'
-        ? isLoss ? a.changePct - b.changePct : b.changePct - a.changePct
-        : isLoss ? a.change   - b.change     : b.change   - a.change
+        ? isLoss
+          ? a.regularMarketChangePercent - b.regularMarketChangePercent
+          : b.regularMarketChangePercent - a.regularMarketChangePercent
+        : isLoss
+          ? a.regularMarketChange - b.regularMarketChange
+          : b.regularMarketChange - a.regularMarketChange
     )
 
   return (
     <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
-      {/* Header */}
       <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Market Movers</h2>
@@ -157,7 +156,6 @@ export default function MarketMovers({ onSelect }) {
         </div>
       </div>
 
-      {/* Body */}
       {error ? (
         <div className="py-10 text-center space-y-2">
           <p className="text-xs text-gray-400 dark:text-gray-600">Could not load market data</p>
