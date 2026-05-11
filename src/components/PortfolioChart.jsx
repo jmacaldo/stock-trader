@@ -4,51 +4,57 @@ import { useStore } from '../store'
 import { useTheme } from '../useTheme'
 
 const RANGES = [
-  { label: '1D', resolution: '60', windowDays: 2,   sliceCount: 8   },
-  { label: '1W', resolution: 'D',  windowDays: 10,  sliceCount: 5   },
-  { label: '1M', resolution: 'D',  windowDays: 45,  sliceCount: 30  },
-  { label: '3M', resolution: 'D',  windowDays: 135, sliceCount: 90  },
-  { label: '6M', resolution: 'D',  windowDays: 270, sliceCount: 180 },
+  { label: '1D', range: '1d',  interval: '60m' },
+  { label: '1W', range: '5d',  interval: '1d'  },
+  { label: '1M', range: '1mo', interval: '1d'  },
+  { label: '3M', range: '3mo', interval: '1d'  },
+  { label: '6M', range: '6mo', interval: '1d'  },
 ]
 
-async function fetchHistory(portfolio, apiKey, range) {
+const isIntraday = (r) => r.interval === '60m'
+
+async function fetchHistory(portfolio, range) {
   const symbols = Object.keys(portfolio)
-  const to = Math.floor(Date.now() / 1000)
-  const from = to - range.windowDays * 24 * 60 * 60
-  const { resolution, sliceCount } = range
+  const intraday = isIntraday(range)
 
   const results = await Promise.all(
     symbols.map(async (sym) => {
-      const res = await fetch(
-        `https://finnhub.io/api/v1/stock/candle?symbol=${sym}&resolution=${resolution}&from=${from}&to=${to}&token=${apiKey}`
-      )
-      const data = await res.json()
-      return { sym, data }
+      const url =
+        `https://query1.finance.yahoo.com/v8/finance/chart/${sym}` +
+        `?range=${range.range}&interval=${range.interval}&includePrePost=false`
+      const res = await fetch(url)
+      if (!res.ok) return { sym, timestamps: [], closes: [] }
+      const json = await res.json()
+      const result = json.chart?.result?.[0]
+      if (!result) return { sym, timestamps: [], closes: [] }
+      return {
+        sym,
+        timestamps: result.timestamp ?? [],
+        closes: result.indicators?.quote?.[0]?.close ?? [],
+      }
     })
   )
 
-  // For daily: key = 'YYYY-MM-DD'. For intraday: key = unix timestamp string.
+  // Build { key: { SYM: closePrice } }
   const byKey = {}
-  results.forEach(({ sym, data }) => {
-    if (data.s !== 'ok' || !data.t) return
-    data.t.forEach((ts, i) => {
-      const key = resolution === 'D'
-        ? new Date(ts * 1000).toISOString().split('T')[0]
-        : String(ts)
+  results.forEach(({ sym, timestamps, closes }) => {
+    timestamps.forEach((ts, i) => {
+      if (closes[i] == null) return
+      const key = intraday ? String(ts) : new Date(ts * 1000).toISOString().split('T')[0]
       if (!byKey[key]) byKey[key] = {}
-      byKey[key][sym] = data.c[i]
+      byKey[key][sym] = closes[i]
     })
   })
 
+  // Sum shares × close price across all holdings for each point in time
   return Object.entries(byKey)
     .sort(([a], [b]) => a.localeCompare(b))
-    .slice(-sliceCount)
-    .map(([key, prices]) => ({
-      date: key,
+    .map(([date, prices]) => ({
+      date,
       value: symbols.reduce((sum, sym) => {
         const price = prices[sym]
         const shares = portfolio[sym]?.shares ?? 0
-        return price ? sum + shares * price : sum
+        return price != null ? sum + shares * price : sum
       }, 0),
     }))
     .filter((d) => d.value > 0)
@@ -63,15 +69,15 @@ const tickUsd = (v) => {
   return `$${v.toFixed(0)}`
 }
 
-function fmtTick(key, isIntraday) {
-  if (isIntraday) {
+function fmtTick(key, range) {
+  if (isIntraday(range)) {
     return new Date(parseInt(key) * 1000).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true })
   }
   return new Date(key + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-function fmtTip(key, isIntraday) {
-  if (isIntraday) {
+function fmtTip(key, range) {
+  if (isIntraday(range)) {
     return new Date(parseInt(key) * 1000).toLocaleString('en-US', {
       weekday: 'short', month: 'short', day: 'numeric',
       hour: 'numeric', minute: '2-digit', hour12: true,
@@ -82,18 +88,18 @@ function fmtTip(key, isIntraday) {
   })
 }
 
-function CustomTooltip({ active, payload, label, isIntraday }) {
+function CustomTooltip({ active, payload, label, range }) {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 shadow-xl">
-      <p className="text-xs text-gray-500 mb-1">{fmtTip(label, isIntraday)}</p>
+      <p className="text-xs text-gray-500 mb-1">{fmtTip(label, range)}</p>
       <p className="text-sm font-semibold text-gray-900 dark:text-white">{usd(payload[0].value)}</p>
     </div>
   )
 }
 
 export default function PortfolioChart() {
-  const { portfolio, apiKey } = useStore()
+  const { portfolio } = useStore()
   const { dark } = useTheme()
   const [range, setRange] = useState(RANGES[2])
   const [data, setData] = useState([])
@@ -101,20 +107,19 @@ export default function PortfolioChart() {
 
   const symbols = Object.keys(portfolio)
   const tickColor = dark ? '#4b5563' : '#9ca3af'
-  const isIntraday = range.resolution !== 'D'
 
   useEffect(() => {
-    if (!symbols.length || !apiKey) { setData([]); return }
+    if (!symbols.length) { setData([]); return }
 
     let cancelled = false
     setLoading(true)
-    fetchHistory(portfolio, apiKey, range)
+    fetchHistory(portfolio, range)
       .then((d) => { if (!cancelled) setData(d) })
       .catch(console.error)
       .finally(() => { if (!cancelled) setLoading(false) })
 
     return () => { cancelled = true }
-  }, [symbols.join(','), apiKey, range])
+  }, [symbols.join(','), range])
 
   if (!symbols.length) return null
   if (!loading && data.length <= 1) return null
@@ -175,7 +180,7 @@ export default function PortfolioChart() {
               </defs>
               <XAxis
                 dataKey="date"
-                tickFormatter={(d) => fmtTick(d, isIntraday)}
+                tickFormatter={(d) => fmtTick(d, range)}
                 tick={{ fill: tickColor, fontSize: 10 }}
                 axisLine={false}
                 tickLine={false}
@@ -189,7 +194,7 @@ export default function PortfolioChart() {
                 width={48}
                 domain={['auto', 'auto']}
               />
-              <Tooltip content={<CustomTooltip isIntraday={isIntraday} />} />
+              <Tooltip content={<CustomTooltip range={range} />} />
               <Area
                 type="monotone"
                 dataKey="value"

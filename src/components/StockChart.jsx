@@ -1,38 +1,40 @@
 import { useState, useEffect } from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { useStore } from '../store'
 import { useTheme } from '../useTheme'
 
-const getNow = () => Math.floor(Date.now() / 1000)
-
 const RANGES = [
-  { label: '1D',  resolution: '60', getFrom: () => getNow() - 2 * 86400,                                                 sliceCount: 8    },
-  { label: '1W',  resolution: 'D',  getFrom: () => getNow() - 10 * 86400,                                                sliceCount: 5    },
-  { label: '1M',  resolution: 'D',  getFrom: () => getNow() - 45 * 86400,                                                sliceCount: 30   },
-  { label: '3M',  resolution: 'D',  getFrom: () => getNow() - 135 * 86400,                                               sliceCount: 90   },
-  { label: 'YTD', resolution: 'D',  getFrom: () => Math.floor(new Date(new Date().getFullYear(), 0, 1).getTime() / 1000), sliceCount: 9999 },
-  { label: '1Y',  resolution: 'D',  getFrom: () => getNow() - 370 * 86400,                                               sliceCount: 252  },
-  { label: 'All', resolution: 'M',  getFrom: () => getNow() - 7300 * 86400,                                              sliceCount: 9999 },
+  { label: '1D',  range: '1d',  interval: '60m' },
+  { label: '1W',  range: '5d',  interval: '1d'  },
+  { label: '1M',  range: '1mo', interval: '1d'  },
+  { label: '3M',  range: '3mo', interval: '1d'  },
+  { label: 'YTD', range: 'ytd', interval: '1d'  },
+  { label: '1Y',  range: '1y',  interval: '1d'  },
+  { label: 'All', range: 'max', interval: '1mo' },
 ]
 
-async function fetchStockHistory(symbol, apiKey, range) {
-  const to = getNow()
-  const from = range.getFrom()
-  const res = await fetch(
-    `https://finnhub.io/api/v1/stock/candle?symbol=${symbol}&resolution=${range.resolution}&from=${from}&to=${to}&token=${apiKey}`
-  )
-  if (!res.ok) throw new Error(`API error ${res.status}`)
-  const data = await res.json()
-  if (data.error) throw new Error(data.error)
-  if (data.s !== 'ok' || !data.t) return []
+const isIntraday = (r) => r.interval === '60m'
+const isMonthly  = (r) => r.interval === '1mo'
 
-  const isIntraday = range.resolution === '60'
-  const points = data.t.map((ts, i) => ({
-    date: isIntraday ? String(ts) : new Date(ts * 1000).toISOString().split('T')[0],
-    value: data.c[i],
-  }))
+async function fetchStockHistory(symbol, range) {
+  const url =
+    `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}` +
+    `?range=${range.range}&interval=${range.interval}&includePrePost=false`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const json = await res.json()
+  const result = json.chart?.result?.[0]
+  if (!result) throw new Error(json.chart?.error?.description ?? 'No data returned')
 
-  return range.sliceCount < 9999 ? points.slice(-range.sliceCount) : points
+  const timestamps = result.timestamp ?? []
+  const closes = result.indicators?.quote?.[0]?.close ?? []
+  const intraday = isIntraday(range)
+
+  return timestamps
+    .map((ts, i) => ({
+      date: intraday ? String(ts) : new Date(ts * 1000).toISOString().split('T')[0],
+      value: closes[i],
+    }))
+    .filter((d) => d.value != null)
 }
 
 const usd = (n) =>
@@ -44,23 +46,23 @@ const tickUsd = (v) => {
 }
 
 function fmtTick(key, range) {
-  if (range.resolution === '60') {
+  if (isIntraday(range)) {
     return new Date(parseInt(key) * 1000).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true })
   }
-  if (range.resolution === 'M') {
+  if (isMonthly(range)) {
     return new Date(key + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
   }
   return new Date(key + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 function fmtTip(key, range) {
-  if (range.resolution === '60') {
+  if (isIntraday(range)) {
     return new Date(parseInt(key) * 1000).toLocaleString('en-US', {
       weekday: 'short', month: 'short', day: 'numeric',
       hour: 'numeric', minute: '2-digit', hour12: true,
     })
   }
-  if (range.resolution === 'M') {
+  if (isMonthly(range)) {
     return new Date(key + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
   }
   return new Date(key + 'T12:00:00').toLocaleDateString('en-US', {
@@ -79,34 +81,33 @@ function CustomTooltip({ active, payload, label, range }) {
 }
 
 export default function StockChart({ symbol }) {
-  const { apiKey } = useStore()
   const { dark } = useTheme()
-  const [range, setRange] = useState(RANGES[2]) // default to 1M — reliable on free tier
+  const [range, setRange] = useState(RANGES[2]) // default 1M
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
   const tickColor = dark ? '#4b5563' : '#9ca3af'
 
-  useEffect(() => {
-    if (!symbol || !apiKey) return
-    let cancelled = false
-    setLoading(true)
-    setData([])
-    setError(null)
-    fetchStockHistory(symbol, apiKey, range)
-      .then((d) => { if (!cancelled) setData(d) })
-      .catch((err) => { if (!cancelled) setError(err.message) })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [symbol, apiKey, range])
-
-  // Reset to 1M when switching to a different stock
+  // Reset when switching to a different stock
   useEffect(() => {
     setRange(RANGES[2])
     setData([])
     setError(null)
   }, [symbol])
+
+  useEffect(() => {
+    if (!symbol) return
+    let cancelled = false
+    setLoading(true)
+    setData([])
+    setError(null)
+    fetchStockHistory(symbol, range)
+      .then((d) => { if (!cancelled) setData(d) })
+      .catch((err) => { if (!cancelled) setError(err.message) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [symbol, range])
 
   const first = data[0]?.value ?? 0
   const last = data[data.length - 1]?.value ?? 0
@@ -152,7 +153,7 @@ export default function StockChart({ symbol }) {
         ) : error ? (
           <div className="h-full flex flex-col items-center justify-center gap-1">
             <p className="text-xs text-gray-400 dark:text-gray-600">Could not load chart</p>
-            <p className="text-xs text-gray-300 dark:text-gray-700 max-w-[200px] text-center">{error}</p>
+            <p className="text-xs text-gray-300 dark:text-gray-700 max-w-[220px] text-center">{error}</p>
           </div>
         ) : data.length > 1 ? (
           <ResponsiveContainer width="100%" height="100%">
