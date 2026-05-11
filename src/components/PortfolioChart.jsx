@@ -117,6 +117,7 @@ export default function PortfolioChart() {
   }, [symbols.join(','), apiKey, range])
 
   if (!symbols.length) return null
+  if (!loading && data.length <= 1) return null
 
   const first = data[0]?.value ?? 0
   const last = data[data.length - 1]?.value ?? 0
@@ -163,7 +164,7 @@ export default function PortfolioChart() {
           <div className="h-full flex items-center justify-center">
             <div className="w-5 h-5 border-2 border-gray-200 dark:border-gray-800 border-t-emerald-500 rounded-full animate-spin" />
           </div>
-        ) : data.length > 1 ? (
+        ) : (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
               <defs>
@@ -200,10 +201,6 @@ export default function PortfolioChart() {
               />
             </AreaChart>
           </ResponsiveContainer>
-        ) : (
-          <div className="h-full flex items-center justify-center text-gray-300 dark:text-gray-700 text-sm">
-            Not enough data yet
-          </div>
         )}
       </div>
     </div>
