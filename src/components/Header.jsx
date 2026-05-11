@@ -25,7 +25,7 @@ function MoonIcon() {
 }
 
 export default function Header({ portfolioValue }) {
-  const { balance, startingBalance, reset, clearApiKey } = useStore()
+  const { balance, startingBalance, reset } = useStore()
   const { dark, toggle } = useTheme()
   const [showReset, setShowReset] = useState(false)
   const [newBalance, setNewBalance] = useState('')
@@ -96,14 +96,7 @@ export default function Header({ portfolioValue }) {
             >
               Reset
             </button>
-            <button
-              onClick={clearApiKey}
-              className="text-xs px-3 py-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-600 hover:text-gray-700 dark:hover:text-gray-400 rounded-lg transition-colors border border-gray-200 dark:border-gray-700"
-              title="Change Finnhub API key"
-            >
-              API Key
-            </button>
-            <button
+<button
               onClick={handleSignOut}
               className="text-xs px-3 py-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 dark:text-gray-600 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-colors border border-gray-200 dark:border-gray-700"
             >
