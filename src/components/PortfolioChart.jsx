@@ -4,44 +4,47 @@ import { useStore } from '../store'
 import { useTheme } from '../useTheme'
 
 const RANGES = [
-  { label: '1M', days: 30 },
-  { label: '3M', days: 90 },
-  { label: '6M', days: 180 },
+  { label: '1D', resolution: '60', windowDays: 2,   sliceCount: 8   },
+  { label: '1W', resolution: 'D',  windowDays: 10,  sliceCount: 5   },
+  { label: '1M', resolution: 'D',  windowDays: 45,  sliceCount: 30  },
+  { label: '3M', resolution: 'D',  windowDays: 135, sliceCount: 90  },
+  { label: '6M', resolution: 'D',  windowDays: 270, sliceCount: 180 },
 ]
 
-async function fetchHistory(portfolio, apiKey, days) {
+async function fetchHistory(portfolio, apiKey, range) {
   const symbols = Object.keys(portfolio)
   const to = Math.floor(Date.now() / 1000)
-  // Request extra calendar days to account for weekends/holidays
-  const from = to - Math.ceil(days * 1.5) * 24 * 60 * 60
+  const from = to - range.windowDays * 24 * 60 * 60
+  const { resolution, sliceCount } = range
 
   const results = await Promise.all(
     symbols.map(async (sym) => {
       const res = await fetch(
-        `https://finnhub.io/api/v1/stock/candle?symbol=${sym}&resolution=D&from=${from}&to=${to}&token=${apiKey}`
+        `https://finnhub.io/api/v1/stock/candle?symbol=${sym}&resolution=${resolution}&from=${from}&to=${to}&token=${apiKey}`
       )
       const data = await res.json()
       return { sym, data }
     })
   )
 
-  // Build { 'YYYY-MM-DD': { SYM: closePrice } }
-  const byDate = {}
+  // For daily: key = 'YYYY-MM-DD'. For intraday: key = unix timestamp string.
+  const byKey = {}
   results.forEach(({ sym, data }) => {
     if (data.s !== 'ok' || !data.t) return
     data.t.forEach((ts, i) => {
-      const date = new Date(ts * 1000).toISOString().split('T')[0]
-      if (!byDate[date]) byDate[date] = {}
-      byDate[date][sym] = data.c[i]
+      const key = resolution === 'D'
+        ? new Date(ts * 1000).toISOString().split('T')[0]
+        : String(ts)
+      if (!byKey[key]) byKey[key] = {}
+      byKey[key][sym] = data.c[i]
     })
   })
 
-  // For each date, sum shares × close price across all holdings
-  return Object.entries(byDate)
+  return Object.entries(byKey)
     .sort(([a], [b]) => a.localeCompare(b))
-    .slice(-days)
-    .map(([date, prices]) => ({
-      date,
+    .slice(-sliceCount)
+    .map(([key, prices]) => ({
+      date: key,
       value: symbols.reduce((sum, sym) => {
         const price = prices[sym]
         const shares = portfolio[sym]?.shares ?? 0
@@ -60,19 +63,30 @@ const tickUsd = (v) => {
   return `$${v.toFixed(0)}`
 }
 
-const tickDate = (d) =>
-  new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+function fmtTick(key, isIntraday) {
+  if (isIntraday) {
+    return new Date(parseInt(key) * 1000).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true })
+  }
+  return new Date(key + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
 
-const tipDate = (d) =>
-  new Date(d + 'T12:00:00').toLocaleDateString('en-US', {
+function fmtTip(key, isIntraday) {
+  if (isIntraday) {
+    return new Date(parseInt(key) * 1000).toLocaleString('en-US', {
+      weekday: 'short', month: 'short', day: 'numeric',
+      hour: 'numeric', minute: '2-digit', hour12: true,
+    })
+  }
+  return new Date(key + 'T12:00:00').toLocaleDateString('en-US', {
     weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
   })
+}
 
-function CustomTooltip({ active, payload, label }) {
+function CustomTooltip({ active, payload, label, isIntraday }) {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 shadow-xl">
-      <p className="text-xs text-gray-500 mb-1">{tipDate(label)}</p>
+      <p className="text-xs text-gray-500 mb-1">{fmtTip(label, isIntraday)}</p>
       <p className="text-sm font-semibold text-gray-900 dark:text-white">{usd(payload[0].value)}</p>
     </div>
   )
@@ -81,19 +95,20 @@ function CustomTooltip({ active, payload, label }) {
 export default function PortfolioChart() {
   const { portfolio, apiKey } = useStore()
   const { dark } = useTheme()
-  const [range, setRange] = useState(RANGES[0])
+  const [range, setRange] = useState(RANGES[2])
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(false)
 
   const symbols = Object.keys(portfolio)
   const tickColor = dark ? '#4b5563' : '#9ca3af'
+  const isIntraday = range.resolution !== 'D'
 
   useEffect(() => {
     if (!symbols.length || !apiKey) { setData([]); return }
 
     let cancelled = false
     setLoading(true)
-    fetchHistory(portfolio, apiKey, range.days)
+    fetchHistory(portfolio, apiKey, range)
       .then((d) => { if (!cancelled) setData(d) })
       .catch(console.error)
       .finally(() => { if (!cancelled) setLoading(false) })
@@ -159,7 +174,7 @@ export default function PortfolioChart() {
               </defs>
               <XAxis
                 dataKey="date"
-                tickFormatter={tickDate}
+                tickFormatter={(d) => fmtTick(d, isIntraday)}
                 tick={{ fill: tickColor, fontSize: 10 }}
                 axisLine={false}
                 tickLine={false}
@@ -173,7 +188,7 @@ export default function PortfolioChart() {
                 width={48}
                 domain={['auto', 'auto']}
               />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<CustomTooltip isIntraday={isIntraday} />} />
               <Area
                 type="monotone"
                 dataKey="value"
