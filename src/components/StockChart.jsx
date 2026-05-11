@@ -6,13 +6,13 @@ import { useTheme } from '../useTheme'
 const getNow = () => Math.floor(Date.now() / 1000)
 
 const RANGES = [
-  { label: '1D',  resolution: '60', getFrom: () => getNow() - 2 * 86400,                                                          sliceCount: 8    },
-  { label: '1W',  resolution: 'D',  getFrom: () => getNow() - 10 * 86400,                                                         sliceCount: 5    },
-  { label: '1M',  resolution: 'D',  getFrom: () => getNow() - 45 * 86400,                                                         sliceCount: 30   },
-  { label: '3M',  resolution: 'D',  getFrom: () => getNow() - 135 * 86400,                                                        sliceCount: 90   },
-  { label: 'YTD', resolution: 'D',  getFrom: () => Math.floor(new Date(new Date().getFullYear(), 0, 1).getTime() / 1000),          sliceCount: 9999 },
-  { label: '1Y',  resolution: 'D',  getFrom: () => getNow() - 370 * 86400,                                                        sliceCount: 252  },
-  { label: 'All', resolution: 'M',  getFrom: () => getNow() - 7300 * 86400,                                                       sliceCount: 9999 },
+  { label: '1D',  resolution: '60', getFrom: () => getNow() - 2 * 86400,                                                 sliceCount: 8    },
+  { label: '1W',  resolution: 'D',  getFrom: () => getNow() - 10 * 86400,                                                sliceCount: 5    },
+  { label: '1M',  resolution: 'D',  getFrom: () => getNow() - 45 * 86400,                                                sliceCount: 30   },
+  { label: '3M',  resolution: 'D',  getFrom: () => getNow() - 135 * 86400,                                               sliceCount: 90   },
+  { label: 'YTD', resolution: 'D',  getFrom: () => Math.floor(new Date(new Date().getFullYear(), 0, 1).getTime() / 1000), sliceCount: 9999 },
+  { label: '1Y',  resolution: 'D',  getFrom: () => getNow() - 370 * 86400,                                               sliceCount: 252  },
+  { label: 'All', resolution: 'M',  getFrom: () => getNow() - 7300 * 86400,                                              sliceCount: 9999 },
 ]
 
 async function fetchStockHistory(symbol, apiKey, range) {
@@ -21,7 +21,9 @@ async function fetchStockHistory(symbol, apiKey, range) {
   const res = await fetch(
     `https://finnhub.io/api/v1/stock/candle?symbol=${symbol}&resolution=${range.resolution}&from=${from}&to=${to}&token=${apiKey}`
   )
+  if (!res.ok) throw new Error(`API error ${res.status}`)
   const data = await res.json()
+  if (data.error) throw new Error(data.error)
   if (data.s !== 'ok' || !data.t) return []
 
   const isIntraday = range.resolution === '60'
@@ -79,9 +81,10 @@ function CustomTooltip({ active, payload, label, range }) {
 export default function StockChart({ symbol }) {
   const { apiKey } = useStore()
   const { dark } = useTheme()
-  const [range, setRange] = useState(RANGES[0])
+  const [range, setRange] = useState(RANGES[2]) // default to 1M — reliable on free tier
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
 
   const tickColor = dark ? '#4b5563' : '#9ca3af'
 
@@ -90,12 +93,20 @@ export default function StockChart({ symbol }) {
     let cancelled = false
     setLoading(true)
     setData([])
+    setError(null)
     fetchStockHistory(symbol, apiKey, range)
       .then((d) => { if (!cancelled) setData(d) })
-      .catch(console.error)
+      .catch((err) => { if (!cancelled) setError(err.message) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [symbol, apiKey, range])
+
+  // Reset to 1M when switching to a different stock
+  useEffect(() => {
+    setRange(RANGES[2])
+    setData([])
+    setError(null)
+  }, [symbol])
 
   const first = data[0]?.value ?? 0
   const last = data[data.length - 1]?.value ?? 0
@@ -138,6 +149,11 @@ export default function StockChart({ symbol }) {
           <div className="h-full flex items-center justify-center">
             <div className="w-4 h-4 border-2 border-gray-200 dark:border-gray-800 border-t-emerald-500 rounded-full animate-spin" />
           </div>
+        ) : error ? (
+          <div className="h-full flex flex-col items-center justify-center gap-1">
+            <p className="text-xs text-gray-400 dark:text-gray-600">Could not load chart</p>
+            <p className="text-xs text-gray-300 dark:text-gray-700 max-w-[200px] text-center">{error}</p>
+          </div>
         ) : data.length > 1 ? (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
@@ -177,7 +193,7 @@ export default function StockChart({ symbol }) {
           </ResponsiveContainer>
         ) : (
           <div className="h-full flex items-center justify-center text-gray-300 dark:text-gray-700 text-xs">
-            No data available
+            No data available for this range
           </div>
         )}
       </div>
