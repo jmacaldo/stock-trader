@@ -41,25 +41,25 @@ export default function StockQuote({ quote, onUpdate, onClose }) {
   const prevClose = quote.regularMarketPreviousClose
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-4">
+    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 space-y-4">
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2 mb-0.5">
-            <span className="font-mono font-bold text-white text-base">{quote.symbol}</span>
+            <span className="font-mono font-bold text-gray-900 dark:text-white text-base">{quote.symbol}</span>
             {quote.currency && (
-              <span className="text-xs text-gray-600 bg-gray-800 px-2 py-0.5 rounded">{quote.currency}</span>
+              <span className="text-xs text-gray-500 dark:text-gray-600 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">{quote.currency}</span>
             )}
           </div>
-          <p className="text-sm text-gray-400 leading-tight">{quote.shortName}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 leading-tight">{quote.shortName}</p>
         </div>
         <div className="flex items-start gap-3">
           <div className="text-right">
-            <p className="text-2xl font-bold text-white tabular-nums">${price.toFixed(2)}</p>
-            <p className={`text-sm font-medium ${isUp ? 'text-emerald-400' : 'text-red-400'}`}>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white tabular-nums">${price.toFixed(2)}</p>
+            <p className={`text-sm font-medium ${isUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
               {isUp ? '▲' : '▼'} {Math.abs(change).toFixed(2)} ({isUp ? '+' : ''}{changePct.toFixed(2)}%)
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-600 hover:text-gray-300 transition-colors mt-0.5">
+          <button onClick={onClose} className="text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-300 transition-colors mt-0.5">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -80,10 +80,10 @@ export default function StockQuote({ quote, onUpdate, onClose }) {
 
       {prevClose && (
         <div className="space-y-1">
-          <div className="flex justify-between text-xs text-gray-600 mb-0.5">
+          <div className="flex justify-between text-xs text-gray-400 dark:text-gray-600 mb-0.5">
             <span>Day range</span>
           </div>
-          <div className="relative h-1.5 bg-gray-800 rounded-full overflow-hidden">
+          <div className="relative h-1.5 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
             {(() => {
               const lo = quote.regularMarketDayLow ?? prevClose
               const hi = quote.regularMarketDayHigh ?? prevClose
@@ -91,32 +91,32 @@ export default function StockQuote({ quote, onUpdate, onClose }) {
               const pct = range > 0 ? ((price - lo) / range) * 100 : 50
               return (
                 <>
-                  <div className={`absolute inset-0 ${isUp ? 'bg-emerald-900/40' : 'bg-red-900/40'}`} />
+                  <div className={`absolute inset-0 ${isUp ? 'bg-emerald-100 dark:bg-emerald-900/40' : 'bg-red-100 dark:bg-red-900/40'}`} />
                   <div
-                    className={`absolute top-0 bottom-0 w-1 rounded-full ${isUp ? 'bg-emerald-400' : 'bg-red-400'}`}
+                    className={`absolute top-0 bottom-0 w-1 rounded-full ${isUp ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-red-500 dark:bg-red-400'}`}
                     style={{ left: `${Math.min(Math.max(pct, 1), 99)}%` }}
                   />
                 </>
               )
             })()}
           </div>
-          <div className="flex justify-between text-xs text-gray-600">
+          <div className="flex justify-between text-xs text-gray-400 dark:text-gray-600">
             <span>{usd(quote.regularMarketDayLow)}</span>
             <span>{usd(quote.regularMarketDayHigh)}</span>
           </div>
         </div>
       )}
 
-      <p className="text-xs text-gray-700 text-center">Auto-refreshes every 30s</p>
+      <p className="text-xs text-gray-300 dark:text-gray-700 text-center">Auto-refreshes every 30s</p>
     </div>
   )
 }
 
 function Row({ label, value }) {
   return (
-    <div className="flex justify-between items-center bg-gray-800/50 rounded-lg px-3 py-2">
+    <div className="flex justify-between items-center bg-gray-50 dark:bg-gray-800/50 rounded-lg px-3 py-2">
       <span className="text-gray-500">{label}</span>
-      <span className="text-gray-200 font-medium tabular-nums">{value}</span>
+      <span className="text-gray-700 dark:text-gray-200 font-medium tabular-nums">{value}</span>
     </div>
   )
 }

@@ -50,8 +50,8 @@ export default function TradePanel({ quote }) {
   }
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-4">
-      <div className="flex rounded-xl overflow-hidden border border-gray-700">
+    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 space-y-4">
+      <div className="flex rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
         {['BUY', 'SELL'].map((m) => (
           <button
             key={m}
@@ -59,7 +59,7 @@ export default function TradePanel({ quote }) {
             className={`flex-1 py-2.5 text-sm font-bold tracking-wide transition-colors ${
               mode === m
                 ? m === 'BUY' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
-                : 'bg-gray-800 text-gray-500 hover:text-gray-300'
+                : 'bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
           >
             {m}
@@ -68,7 +68,7 @@ export default function TradePanel({ quote }) {
       </div>
 
       {holding && (
-        <div className="flex items-center justify-between text-xs bg-gray-800/60 rounded-lg px-3 py-2 text-gray-400">
+        <div className="flex items-center justify-between text-xs bg-gray-100/80 dark:bg-gray-800/60 rounded-lg px-3 py-2 text-gray-600 dark:text-gray-400">
           <span>{fmtShares(holding.shares)} shares · {usd(holdingValue)}</span>
           <span>Avg cost {usd(holding.avgCost)}</span>
         </div>
@@ -79,7 +79,7 @@ export default function TradePanel({ quote }) {
           {mode === 'BUY' ? 'Amount to invest' : 'Amount to sell'}
         </label>
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">$</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400 text-sm font-medium">$</span>
           <input
             type="number"
             min="0.01"
@@ -88,7 +88,7 @@ export default function TradePanel({ quote }) {
             onChange={(e) => setAmount(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleTrade()}
             placeholder="0.00"
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-7 pr-14 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors text-sm"
+            className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg pl-7 pr-14 py-3 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 transition-colors text-sm placeholder-gray-400 dark:placeholder-gray-500"
           />
           <button
             onClick={() => setAmount(
@@ -96,38 +96,38 @@ export default function TradePanel({ quote }) {
                 ? balance.toFixed(2)
                 : holdingValue.toFixed(2)
             )}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-blue-400 hover:text-blue-300 font-semibold transition-colors px-1"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-semibold transition-colors px-1"
           >
             MAX
           </button>
         </div>
-        <p className="text-xs text-gray-600 mt-1">
+        <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">
           {mode === 'BUY'
             ? `Available: ${usd(balance)}`
             : holding ? `Position value: ${usd(holdingValue)}` : 'No position'}
         </p>
       </div>
 
-      <div className="bg-gray-800/40 rounded-lg px-3 py-3 space-y-2 text-sm">
-        <div className="flex justify-between text-gray-400">
+      <div className="bg-gray-50 dark:bg-gray-800/40 rounded-lg px-3 py-3 space-y-2 text-sm">
+        <div className="flex justify-between text-gray-500 dark:text-gray-400">
           <span>Price per share</span>
-          <span className="text-gray-200 tabular-nums">{usd(price)}</span>
+          <span className="text-gray-700 dark:text-gray-200 tabular-nums">{usd(price)}</span>
         </div>
-        <div className="flex justify-between text-gray-400">
+        <div className="flex justify-between text-gray-500 dark:text-gray-400">
           <span>Est. shares</span>
-          <span className="text-gray-200 tabular-nums">{dollars > 0 ? fmtShares(estimatedShares) : '—'}</span>
+          <span className="text-gray-700 dark:text-gray-200 tabular-nums">{dollars > 0 ? fmtShares(estimatedShares) : '—'}</span>
         </div>
-        <div className="border-t border-gray-700 pt-2 flex justify-between font-semibold">
-          <span className="text-gray-300">{mode === 'BUY' ? 'Total cost' : 'Proceeds'}</span>
-          <span className="text-white tabular-nums">{dollars > 0 ? usd(dollars) : '—'}</span>
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-2 flex justify-between font-semibold">
+          <span className="text-gray-600 dark:text-gray-300">{mode === 'BUY' ? 'Total cost' : 'Proceeds'}</span>
+          <span className="text-gray-900 dark:text-white tabular-nums">{dollars > 0 ? usd(dollars) : '—'}</span>
         </div>
         {dollars > 0 && (
-          <div className="flex justify-between text-xs text-gray-500">
+          <div className="flex justify-between text-xs text-gray-400 dark:text-gray-500">
             <span>{mode === 'BUY' ? 'Cash after' : 'Position after'}</span>
             <span className={
               (mode === 'BUY' ? afterCash : afterValue) < -0.01
-                ? 'text-red-400'
-                : 'text-gray-400'
+                ? 'text-red-500 dark:text-red-400'
+                : 'text-gray-400 dark:text-gray-400'
             }>
               {mode === 'BUY' ? usd(Math.max(afterCash, 0)) : usd(Math.max(afterValue, 0))}
             </span>
@@ -150,8 +150,8 @@ export default function TradePanel({ quote }) {
       {msg && (
         <div className={`text-xs text-center rounded-lg px-3 py-2.5 leading-relaxed ${
           msg.type === 'error'
-            ? 'bg-red-950/50 text-red-400 border border-red-900/40'
-            : 'bg-emerald-950/50 text-emerald-400 border border-emerald-900/40'
+            ? 'bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/40'
+            : 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/40'
         }`}>
           {msg.text}
         </div>

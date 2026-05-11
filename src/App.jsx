@@ -2,6 +2,7 @@ import { useState, useEffect, lazy, Suspense } from 'react'
 import { useStore } from './store'
 import { supabase } from './supabase'
 import { loadData, syncAccount } from './db'
+import { ThemeProvider } from './useTheme'
 import Header from './components/Header'
 import Search from './components/Search'
 import StockQuote from './components/StockQuote'
@@ -70,40 +71,43 @@ export default function App() {
   // Called by ApiKeySetup after the key is saved
   const handleKeySet = () => setPhase('app')
 
-  if (phase === 'loading') return <LoadingScreen />
-  if (phase === 'auth') return <AuthScreen onAuth={handleAuth} />
-  if (phase === 'setup') return <ApiKeySetup onDone={handleKeySet} />
-
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
-      <Header portfolioValue={portfolioValue} />
+    <ThemeProvider>
+      {phase === 'loading' && <LoadingScreen />}
+      {phase === 'auth' && <AuthScreen onAuth={handleAuth} />}
+      {phase === 'setup' && <ApiKeySetup onDone={handleKeySet} />}
+      {phase === 'app' && (
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
+          <Header portfolioValue={portfolioValue} />
 
-      <main className="max-w-7xl mx-auto p-4 lg:p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-          <div className="lg:col-span-2 space-y-4">
-            <Search onSelect={setQuote} />
-            {quote ? (
-              <>
-                <StockQuote quote={quote} onUpdate={setQuote} onClose={() => setQuote(null)} />
-                <TradePanel quote={quote} />
-              </>
-            ) : (
-              <div className="bg-gray-900 border border-gray-800 border-dashed rounded-xl p-8 text-center">
-                <div className="text-3xl mb-3 opacity-40">📈</div>
-                <p className="text-gray-500 text-sm">Select a stock to view its price and start trading</p>
+          <main className="max-w-7xl mx-auto p-4 lg:p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+              <div className="lg:col-span-2 space-y-4">
+                <Search onSelect={setQuote} />
+                {quote ? (
+                  <>
+                    <StockQuote quote={quote} onUpdate={setQuote} onClose={() => setQuote(null)} />
+                    <TradePanel quote={quote} />
+                  </>
+                ) : (
+                  <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 border-dashed rounded-xl p-8 text-center">
+                    <div className="text-3xl mb-3 opacity-40">📈</div>
+                    <p className="text-gray-400 dark:text-gray-500 text-sm">Select a stock to view its price and start trading</p>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          <div className="lg:col-span-3 space-y-4">
-            <Suspense fallback={null}>
-              <PortfolioChart />
-            </Suspense>
-            <Portfolio onValueChange={setPortfolioValue} />
-            <History />
-          </div>
+              <div className="lg:col-span-3 space-y-4">
+                <Suspense fallback={null}>
+                  <PortfolioChart />
+                </Suspense>
+                <Portfolio onValueChange={setPortfolioValue} />
+                <History />
+              </div>
+            </div>
+          </main>
         </div>
-      </main>
-    </div>
+      )}
+    </ThemeProvider>
   )
 }

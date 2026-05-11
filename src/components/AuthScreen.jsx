@@ -44,7 +44,6 @@ export default function AuthScreen({ onAuth }) {
         if (data.session) {
           onAuth(data.user.id)
         } else {
-          // Email confirmation is enabled — tell the user to check their inbox
           setNotice('Account created! Check your email for a confirmation link, then sign in.')
           switchMode('signin')
         }
@@ -68,23 +67,25 @@ export default function AuthScreen({ onAuth }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 max-w-sm w-full shadow-2xl">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-8 max-w-sm w-full shadow-2xl">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-9 h-9 bg-emerald-500 rounded-xl flex items-center justify-center text-white font-bold text-base">P</div>
           <div>
-            <h1 className="text-lg font-bold text-white leading-none">PaperTrade</h1>
+            <h1 className="text-lg font-bold text-gray-900 dark:text-white leading-none">PaperTrade</h1>
             <p className="text-xs text-gray-500 mt-0.5">Paper Trading Simulator</p>
           </div>
         </div>
 
-        <div className="flex rounded-xl overflow-hidden border border-gray-700 mb-6">
+        <div className="flex rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 mb-6">
           {[['signin', 'Sign In'], ['signup', 'Create Account']].map(([m, label]) => (
             <button
               key={m}
               onClick={() => switchMode(m)}
               className={`flex-1 py-2 text-sm font-semibold transition-colors ${
-                mode === m ? 'bg-gray-700 text-white' : 'bg-gray-800 text-gray-500 hover:text-gray-300'
+                mode === m
+                  ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
+                  : 'bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
               }`}
             >
               {label}
@@ -93,7 +94,7 @@ export default function AuthScreen({ onAuth }) {
         </div>
 
         {notice && (
-          <div className="bg-emerald-950/50 border border-emerald-900/40 rounded-xl px-4 py-3 text-sm text-emerald-400 mb-4">
+          <div className="bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-900/40 rounded-xl px-4 py-3 text-sm text-emerald-700 dark:text-emerald-400 mb-4">
             {notice}
           </div>
         )}
@@ -106,7 +107,7 @@ export default function AuthScreen({ onAuth }) {
           )}
 
           {error && (
-            <p className="text-xs text-red-400 bg-red-950/40 border border-red-900/40 rounded-lg px-3 py-2">{error}</p>
+            <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/40 rounded-lg px-3 py-2">{error}</p>
           )}
 
           <button
@@ -122,7 +123,7 @@ export default function AuthScreen({ onAuth }) {
               type="button"
               onClick={handleForgotPassword}
               disabled={loading}
-              className="w-full text-xs text-gray-600 hover:text-gray-400 transition-colors py-1"
+              className="w-full text-xs text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400 transition-colors py-1"
             >
               Forgot password?
             </button>
@@ -145,7 +146,7 @@ function Field({ label, type, value, onChange, placeholder, minLength }) {
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         autoComplete={type === 'email' ? 'email' : type === 'password' ? 'current-password' : 'off'}
-        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
+        className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2.5 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-blue-500 transition-colors placeholder-gray-400 dark:placeholder-gray-500"
       />
     </div>
   )

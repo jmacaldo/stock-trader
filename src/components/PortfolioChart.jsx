@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { useStore } from '../store'
+import { useTheme } from '../useTheme'
 
 const RANGES = [
   { label: '1M', days: 30 },
@@ -70,20 +71,22 @@ const tipDate = (d) =>
 function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-gray-950 border border-gray-700 rounded-xl px-3 py-2.5 shadow-xl">
+    <div className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 shadow-xl">
       <p className="text-xs text-gray-500 mb-1">{tipDate(label)}</p>
-      <p className="text-sm font-semibold text-white">{usd(payload[0].value)}</p>
+      <p className="text-sm font-semibold text-gray-900 dark:text-white">{usd(payload[0].value)}</p>
     </div>
   )
 }
 
 export default function PortfolioChart() {
   const { portfolio, apiKey } = useStore()
+  const { dark } = useTheme()
   const [range, setRange] = useState(RANGES[0])
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(false)
 
   const symbols = Object.keys(portfolio)
+  const tickColor = dark ? '#4b5563' : '#9ca3af'
 
   useEffect(() => {
     if (!symbols.length || !apiKey) { setData([]); return }
@@ -109,7 +112,7 @@ export default function PortfolioChart() {
   const gradId = `grad-${isUp ? 'up' : 'down'}`
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4">
       <div className="flex items-center justify-between mb-1">
         <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
           Holdings Performance
@@ -121,8 +124,8 @@ export default function PortfolioChart() {
               onClick={() => setRange(r)}
               className={`text-xs px-2 py-0.5 rounded font-medium transition-colors ${
                 range.label === r.label
-                  ? 'bg-gray-700 text-white'
-                  : 'text-gray-600 hover:text-gray-400'
+                  ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
+                  : 'text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400'
               }`}
             >
               {r.label}
@@ -133,8 +136,8 @@ export default function PortfolioChart() {
 
       {data.length > 1 && (
         <div className="mb-3">
-          <span className="text-2xl font-bold text-white tabular-nums">{usd(last)}</span>
-          <span className={`ml-2 text-sm font-semibold ${isUp ? 'text-emerald-400' : 'text-red-400'}`}>
+          <span className="text-2xl font-bold text-gray-900 dark:text-white tabular-nums">{usd(last)}</span>
+          <span className={`ml-2 text-sm font-semibold ${isUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
             {isUp ? '+' : ''}{usd(pnl)} ({isUp ? '+' : ''}{pnlPct.toFixed(2)}%)
           </span>
         </div>
@@ -143,7 +146,7 @@ export default function PortfolioChart() {
       <div className="h-44">
         {loading ? (
           <div className="h-full flex items-center justify-center">
-            <div className="w-5 h-5 border-2 border-gray-800 border-t-emerald-500 rounded-full animate-spin" />
+            <div className="w-5 h-5 border-2 border-gray-200 dark:border-gray-800 border-t-emerald-500 rounded-full animate-spin" />
           </div>
         ) : data.length > 1 ? (
           <ResponsiveContainer width="100%" height="100%">
@@ -157,14 +160,14 @@ export default function PortfolioChart() {
               <XAxis
                 dataKey="date"
                 tickFormatter={tickDate}
-                tick={{ fill: '#4b5563', fontSize: 10 }}
+                tick={{ fill: tickColor, fontSize: 10 }}
                 axisLine={false}
                 tickLine={false}
                 interval="preserveStartEnd"
               />
               <YAxis
                 tickFormatter={tickUsd}
-                tick={{ fill: '#4b5563', fontSize: 10 }}
+                tick={{ fill: tickColor, fontSize: 10 }}
                 axisLine={false}
                 tickLine={false}
                 width={48}
@@ -183,7 +186,7 @@ export default function PortfolioChart() {
             </AreaChart>
           </ResponsiveContainer>
         ) : (
-          <div className="h-full flex items-center justify-center text-gray-700 text-sm">
+          <div className="h-full flex items-center justify-center text-gray-300 dark:text-gray-700 text-sm">
             Not enough data yet
           </div>
         )}
