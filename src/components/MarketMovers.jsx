@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react'
 import { fetchQuote } from '../api'
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../supabase'
+
+const PROXY = `${SUPABASE_URL}/functions/v1/yahoo-chart`
+const AUTH = { Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
 
 const WATCHLIST = [
   'AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA','JPM','V','UNH',
@@ -10,8 +14,8 @@ const WATCHLIST = [
 ]
 
 async function fetchMovers(count = 8) {
-  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${WATCHLIST.join(',')}`
-  const res = await fetch(url)
+  const url = `${PROXY}?symbols=${WATCHLIST.join(',')}`
+  const res = await fetch(url, { headers: AUTH })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const json = await res.json()
   const quotes = json.quoteResponse?.result
