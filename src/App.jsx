@@ -10,8 +10,9 @@ import TradePanel from './components/TradePanel'
 import Portfolio from './components/Portfolio'
 import History from './components/History'
 
-const PortfolioChart = lazy(() => import('./components/PortfolioChart'))
-const MarketMovers = lazy(() => import('./components/MarketMovers'))
+const PortfolioChart  = lazy(() => import('./components/PortfolioChart'))
+const RealHoldings   = lazy(() => import('./components/RealHoldings'))
+const MarketMovers   = lazy(() => import('./components/MarketMovers'))
 import ApiKeySetup from './components/ApiKeySetup'
 import AuthScreen from './components/AuthScreen'
 import LoadingScreen from './components/LoadingScreen'
@@ -106,6 +107,9 @@ export default function App() {
                 <History />
               </div>
             </div>
+            <Suspense fallback={null}>
+              <RealHoldings />
+            </Suspense>
             <Suspense fallback={null}>
               <MarketMovers onSelect={setQuote} />
             </Suspense>
