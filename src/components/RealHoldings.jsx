@@ -112,6 +112,7 @@ export default function RealHoldings() {
       .then(({ data }) => {
         setHoldings((data ?? []).map((r) => ({
           symbol: r.symbol,
+          name: r.name ?? null,
           shares: parseFloat(r.shares),
           cashInvested: parseFloat(r.cash_invested),
         })))
@@ -175,14 +176,15 @@ export default function RealHoldings() {
     setSubmitting(true)
     setFormError(null)
     try {
-      await fetchQuote(symbol) // validates symbol
+      const quote = await fetchQuote(symbol)
+      const name  = quote.shortName ?? symbol
       await supabase.from('real_holdings').upsert(
-        { user_id: userId, symbol, shares, cash_invested: cash },
+        { user_id: userId, symbol, name, shares, cash_invested: cash },
         { onConflict: 'user_id,symbol' }
       )
       setHoldings((prev) => {
         const rest = prev.filter((h) => h.symbol !== symbol)
-        return [...rest, { symbol, shares, cashInvested: cash }]
+        return [...rest, { symbol, name, shares, cashInvested: cash }]
       })
       closeForm()
     } catch {
@@ -320,7 +322,10 @@ export default function RealHoldings() {
                   const clr = up ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
                   return (
                     <tr key={r.symbol} className="border-t border-gray-100 dark:border-gray-800/40 hover:bg-gray-50 dark:hover:bg-gray-800/20 transition-colors">
-                      <td className="px-4 py-3 font-mono font-bold text-gray-900 dark:text-white text-sm">{r.symbol}</td>
+                      <td className="px-4 py-3">
+                        <div className="font-mono font-bold text-gray-900 dark:text-white text-sm">{r.symbol}</div>
+                        {r.name && <div className="text-xs text-gray-400 dark:text-gray-600 truncate max-w-[130px]">{r.name}</div>}
+                      </td>
                       <td className="text-right px-4 py-3 text-gray-600 dark:text-gray-300 tabular-nums">
                         {r.shares < 1 ? r.shares.toFixed(6) : r.shares.toFixed(4)}
                       </td>
