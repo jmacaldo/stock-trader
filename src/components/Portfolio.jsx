@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useStore } from '../store'
-import { fetchQuotes } from '../api'
+import { refreshPrices } from '../prices'
 
 const usd = (n) =>
   (n ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
@@ -25,9 +25,7 @@ export default function Portfolio({ onValueChange }) {
     const load = async () => {
       setLoading(true)
       try {
-        const quotes = await fetchQuotes(symbols)
-        const map = {}
-        quotes.forEach((q) => { map[q.symbol] = q.regularMarketPrice })
+        const map = await refreshPrices(symbols)
         setPrices(map)
         const total = symbols.reduce((sum, sym) => sum + (portfolio[sym].shares * (map[sym] ?? portfolio[sym].avgCost)), 0)
         onValueChangeRef.current?.(total)
