@@ -21,23 +21,24 @@ async function fetchHistory(portfolio, range) {
   const symbols = Object.keys(portfolio)
   const intraday = isIntraday(range)
 
-  const results = await Promise.all(
-    symbols.map(async (sym) => {
-      const url =
-        `${CHART_PROXY}?symbol=${sym}` +
-        `&range=${range.range}&interval=${range.interval}`
+  const results = []
+  for (const sym of symbols) {
+    try {
+      const url = `${CHART_PROXY}?symbol=${sym}&range=${range.range}&interval=${range.interval}`
       const res = await fetch(url, { headers: AUTH })
-      if (!res.ok) return { sym, timestamps: [], closes: [] }
+      if (!res.ok) { results.push({ sym, timestamps: [], closes: [] }); continue }
       const json = await res.json()
       const result = json.chart?.result?.[0]
-      if (!result) return { sym, timestamps: [], closes: [] }
-      return {
+      if (!result) { results.push({ sym, timestamps: [], closes: [] }); continue }
+      results.push({
         sym,
         timestamps: result.timestamp ?? [],
         closes: result.indicators?.quote?.[0]?.close ?? [],
-      }
-    })
-  )
+      })
+    } catch {
+      results.push({ sym, timestamps: [], closes: [] })
+    }
+  }
 
   // Build { key: { SYM: closePrice } }
   const byKey = {}
