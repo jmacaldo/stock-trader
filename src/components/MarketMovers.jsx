@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { fetchQuote, fetchQuotes } from '../api'
+import { fetchQuote } from '../api'
 
 const WATCHLIST = [
   'AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA','JPM','V','UNH',
@@ -10,8 +10,22 @@ const WATCHLIST = [
 ]
 
 async function fetchMovers(count = 8) {
-  const quotes = await fetchQuotes(WATCHLIST)
-  const valid = quotes.filter((q) => q.regularMarketChangePercent != null)
+  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${WATCHLIST.join(',')}`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const json = await res.json()
+  const quotes = json.quoteResponse?.result
+  if (!quotes?.length) throw new Error(json.quoteResponse?.error?.description ?? 'No data returned')
+
+  const valid = quotes
+    .filter((q) => q.regularMarketChangePercent != null)
+    .map((q) => ({
+      symbol: q.symbol,
+      regularMarketPrice: q.regularMarketPrice ?? 0,
+      regularMarketChange: q.regularMarketChange ?? 0,
+      regularMarketChangePercent: q.regularMarketChangePercent ?? 0,
+    }))
+
   const sorted = [...valid].sort((a, b) => b.regularMarketChangePercent - a.regularMarketChangePercent)
   return {
     gainers: sorted.slice(0, count),
