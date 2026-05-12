@@ -10,11 +10,15 @@ const PROXY = `${SUPABASE_URL}/functions/v1/yahoo-chart`
 const AUTH  = { Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
 
 const RANGES = [
-  { label: '1M', range: '1mo', interval: '1d' },
-  { label: '3M', range: '3mo', interval: '1d' },
-  { label: '6M', range: '6mo', interval: '1d' },
-  { label: '1Y', range: '1y',  interval: '1d' },
+  { label: '1D', range: '1d',  interval: '60m' },
+  { label: '1W', range: '5d',  interval: '1d'  },
+  { label: '1M', range: '1mo', interval: '1d'  },
+  { label: '3M', range: '3mo', interval: '1d'  },
+  { label: '6M', range: '6mo', interval: '1d'  },
+  { label: '1Y', range: '1y',  interval: '1d'  },
 ]
+
+const isIntraday = (r) => r.interval === '60m'
 
 const usd = (n) =>
   (n ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
@@ -39,9 +43,10 @@ async function fetchChartHistory(holdings, range) {
       if (!result) continue
       const timestamps = result.timestamp ?? []
       const closes = result.indicators?.quote?.[0]?.close ?? []
+      const intraday = isIntraday(range)
       timestamps.forEach((ts, i) => {
         if (closes[i] == null) return
-        const key = new Date(ts * 1000).toISOString().split('T')[0]
+        const key = intraday ? String(ts) : new Date(ts * 1000).toISOString().split('T')[0]
         byKey[key] = (byKey[key] ?? 0) + closes[i] * shares
       })
     } catch {}
@@ -52,15 +57,27 @@ async function fetchChartHistory(holdings, range) {
     .filter((d) => d.value > 0)
 }
 
-function ChartTooltip({ active, payload, label }) {
+function fmtTick(key, range) {
+  if (isIntraday(range))
+    return new Date(parseInt(key) * 1000).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true })
+  return new Date(key + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function fmtTip(key, range) {
+  if (isIntraday(range))
+    return new Date(parseInt(key) * 1000).toLocaleString('en-US', {
+      weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true,
+    })
+  return new Date(key + 'T12:00:00').toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+  })
+}
+
+function ChartTooltip({ active, payload, label, range }) {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 shadow-xl">
-      <p className="text-xs text-gray-500 mb-1">
-        {new Date(label + 'T12:00:00').toLocaleDateString('en-US', {
-          weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
-        })}
-      </p>
+      <p className="text-xs text-gray-500 mb-1">{fmtTip(label, range)}</p>
       <p className="text-sm font-semibold text-gray-900 dark:text-white">{usd(payload[0].value)}</p>
     </div>
   )
@@ -74,7 +91,7 @@ export default function RealHoldings() {
   const [holdings, setHoldings]       = useState([])
   const [prices, setPrices]           = useState({})
   const [chartData, setChartData]     = useState([])
-  const [chartRange, setChartRange]   = useState(RANGES[0])
+  const [chartRange, setChartRange]   = useState(RANGES[2]) // default 1M
   const [chartLoading, setChartLoading] = useState(false)
   const [loading, setLoading]         = useState(true)
   const [showForm, setShowForm]       = useState(false)
@@ -413,7 +430,7 @@ export default function RealHoldings() {
                       </defs>
                       <XAxis
                         dataKey="date"
-                        tickFormatter={(d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        tickFormatter={(d) => fmtTick(d, chartRange)}
                         tick={{ fill: tickColor, fontSize: 10 }}
                         axisLine={false} tickLine={false}
                         interval="preserveStartEnd"
@@ -424,7 +441,7 @@ export default function RealHoldings() {
                         axisLine={false} tickLine={false}
                         width={48} domain={['auto', 'auto']}
                       />
-                      <Tooltip content={<ChartTooltip />} />
+                      <Tooltip content={<ChartTooltip range={chartRange} />} />
                       <Area
                         type="monotone" dataKey="value"
                         stroke={stroke} strokeWidth={2}
