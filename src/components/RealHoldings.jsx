@@ -377,7 +377,7 @@ export default function RealHoldings() {
                   <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Performance</h3>
                   {chartData.length > 1 && (
                     <span className={`text-xs font-semibold ${chartIsUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                      {chartPnlPct >= 0 ? '+' : ''}{chartPnlPct.toFixed(2)}%
+                      {chartPnl >= 0 ? '+' : ''}{usd(chartPnl)} ({chartPnlPct >= 0 ? '+' : ''}{chartPnlPct.toFixed(2)}%)
                     </span>
                   )}
                 </div>
