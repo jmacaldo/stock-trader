@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { useTheme } from '../useTheme'
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../supabase'
+
+const CHART_PROXY = `${SUPABASE_URL}/functions/v1/yahoo-chart`
+const AUTH = { Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
 
 const RANGES = [
   { label: '1D',  range: '1d',  interval: '60m' },
@@ -17,9 +21,9 @@ const isMonthly  = (r) => r.interval === '1mo'
 
 async function fetchStockHistory(symbol, range) {
   const url =
-    `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}` +
-    `?range=${range.range}&interval=${range.interval}&includePrePost=false`
-  const res = await fetch(url)
+    `${CHART_PROXY}?symbol=${symbol}` +
+    `&range=${range.range}&interval=${range.interval}`
+  const res = await fetch(url, { headers: AUTH })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const json = await res.json()
   const result = json.chart?.result?.[0]
