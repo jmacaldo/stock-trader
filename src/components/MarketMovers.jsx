@@ -1,34 +1,15 @@
 import { useState, useEffect } from 'react'
-import { fetchQuote } from '../api'
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../supabase'
-
-const PROXY = `${SUPABASE_URL}/functions/v1/yahoo-chart`
-const AUTH = { Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+import { fetchQuote, fetchQuotes } from '../api'
 
 const WATCHLIST = [
   'AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA','JPM','V','UNH',
   'XOM','JNJ','WMT','MA','PG','LLY','HD','CVX','MRK','ABBV',
   'AVGO','COST','KO','ADBE','CSCO','BAC','CRM','NFLX','AMD','DIS',
-  'NKE','ORCL','INTC','QCOM','TXN','AMGN','GS','CAT','BA','GE',
-  'PLTR','COIN','SOFI','RIVN','LCID','MSTR','AMC','GME','HOOD','RBLX',
 ]
 
 async function fetchMovers(count = 8) {
-  const url = `${PROXY}?symbols=${WATCHLIST.join(',')}`
-  const res = await fetch(url, { headers: AUTH })
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const json = await res.json()
-  const quotes = json.quoteResponse?.result
-  if (!quotes?.length) throw new Error(json.quoteResponse?.error?.description ?? 'No data returned')
-
-  const valid = quotes
-    .filter((q) => q.regularMarketChangePercent != null)
-    .map((q) => ({
-      symbol: q.symbol,
-      regularMarketPrice: q.regularMarketPrice ?? 0,
-      regularMarketChange: q.regularMarketChange ?? 0,
-      regularMarketChangePercent: q.regularMarketChangePercent ?? 0,
-    }))
+  const quotes = await fetchQuotes(WATCHLIST)
+  const valid = quotes.filter((q) => q.regularMarketChangePercent != null)
 
   const sorted = [...valid].sort((a, b) => b.regularMarketChangePercent - a.regularMarketChangePercent)
   return {
