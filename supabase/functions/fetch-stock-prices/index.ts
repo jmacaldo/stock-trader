@@ -1,12 +1,15 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const STALE_MS = 15 * 60 * 1000
+const BASE = 'https://finnhub.io/api/v1'
 
 Deno.serve(async () => {
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   )
+  const apiKey = Deno.env.get('FINNHUB_API_KEY')
+  if (!apiKey) return json({ error: 'FINNHUB_API_KEY not set' }, 500)
 
   // All distinct symbols across every user's portfolio
   const { data: positions, error: posErr } = await supabase
@@ -36,23 +39,22 @@ Deno.serve(async () => {
 
   if (!stale.length) return json({ message: 'All prices are fresh' })
 
-  // Fetch from Yahoo Finance
-  const res = await fetch(
-    `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${stale.join(',')}`
+  // Fetch from Finnhub (one call per symbol, in parallel)
+  const results = await Promise.all(
+    stale.map(async (sym) => {
+      try {
+        const res = await fetch(`${BASE}/quote?symbol=${sym}&token=${apiKey}`)
+        if (!res.ok) return null
+        const q = await res.json()
+        if (!q.c) return null
+        return { symbol: sym, price: q.c, fetched_at: new Date().toISOString() }
+      } catch {
+        return null
+      }
+    })
   )
-  if (!res.ok) return json({ error: `Yahoo Finance HTTP ${res.status}` }, 502)
 
-  const data = await res.json()
-  const quotes: { symbol: string; regularMarketPrice?: number }[] =
-    data.quoteResponse?.result ?? []
-
-  const updates = quotes
-    .filter((q) => q.regularMarketPrice != null)
-    .map((q) => ({
-      symbol: q.symbol,
-      price: q.regularMarketPrice,
-      fetched_at: new Date().toISOString(),
-    }))
+  const updates = results.filter(Boolean) as { symbol: string; price: number; fetched_at: string }[]
 
   if (updates.length) {
     const { error: upsertErr } = await supabase

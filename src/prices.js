@@ -1,6 +1,25 @@
 import { supabase } from './supabase'
+import { useStore } from './store'
 
 const STALE_MS = 15 * 60 * 1000
+const BASE = 'https://finnhub.io/api/v1'
+
+async function fetchFinnhubPrices(symbols, apiKey) {
+  const results = await Promise.all(
+    symbols.map(async (sym) => {
+      try {
+        const res = await fetch(`${BASE}/quote?symbol=${sym}&token=${apiKey}`)
+        if (!res.ok) return null
+        const q = await res.json()
+        if (!q.c) return null
+        return { symbol: sym, price: q.c, fetched_at: new Date().toISOString() }
+      } catch {
+        return null
+      }
+    })
+  )
+  return results.filter(Boolean)
+}
 
 export async function refreshPrices(symbols) {
   if (!symbols.length) return {}
@@ -19,27 +38,17 @@ export async function refreshPrices(symbols) {
   })
 
   if (stale.length) {
-    try {
-      const res = await fetch(
-        `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${stale.join(',')}`
-      )
-      if (res.ok) {
-        const json = await res.json()
-        const quotes = json.quoteResponse?.result ?? []
-        const updates = quotes
-          .filter((q) => q.regularMarketPrice != null)
-          .map((q) => ({
-            symbol: q.symbol,
-            price: q.regularMarketPrice,
-            fetched_at: new Date().toISOString(),
-          }))
+    const apiKey = useStore.getState().apiKey
+    if (apiKey) {
+      try {
+        const updates = await fetchFinnhubPrices(stale, apiKey)
         if (updates.length) {
           await supabase.from('stock_prices').upsert(updates, { onConflict: 'symbol' })
           updates.forEach((u) => { stored[u.symbol] = u })
         }
+      } catch {
+        // fall through — use whatever is stored
       }
-    } catch {
-      // fall through — use whatever is stored
     }
   }
 
