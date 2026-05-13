@@ -4,7 +4,7 @@ import { searchStocks } from '../stocks'
 
 const POPULAR = ['AAPL', 'NVDA', 'MSFT', 'GOOGL', 'TSLA', 'AMZN', 'META', 'SPY']
 
-export default function Search({ onSelect }) {
+export default function Search({ onSelect, autoFocus }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
@@ -59,6 +59,7 @@ export default function Search({ onSelect }) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Symbol or company name..."
+              autoFocus={autoFocus}
               className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl pl-10 pr-10 py-3 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors text-sm"
             />
             {loading ? (
