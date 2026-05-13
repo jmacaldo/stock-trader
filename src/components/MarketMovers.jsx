@@ -1,22 +1,6 @@
 import { useState, useEffect } from 'react'
-import { fetchQuote, fetchQuotes } from '../api'
-
-const WATCHLIST = [
-  'AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA','JPM','V','UNH',
-  'XOM','JNJ','WMT','MA','PG','LLY','HD','CVX','MRK','ABBV',
-  'AVGO','COST','KO','ADBE','CSCO','BAC','CRM','NFLX','AMD','DIS',
-]
-
-async function fetchMovers(count = 8) {
-  const quotes = await fetchQuotes(WATCHLIST)
-  const valid = quotes.filter((q) => q.regularMarketChangePercent != null)
-
-  const sorted = [...valid].sort((a, b) => b.regularMarketChangePercent - a.regularMarketChangePercent)
-  return {
-    gainers: sorted.slice(0, count),
-    losers: sorted.slice(-count).reverse(),
-  }
-}
+import { fetchQuote } from '../api'
+import { refreshMovers } from '../movers'
 
 function MoverRow({ q, isLoss, selecting, onSelect }) {
   const busy = selecting === q.symbol
@@ -85,7 +69,7 @@ export default function MarketMovers({ onSelect }) {
     setLoading(true)
     setError(null)
     try {
-      const { gainers: g, losers: l } = await fetchMovers(8)
+      const { gainers: g, losers: l } = await refreshMovers(8)
       setGainers(g)
       setLosers(l)
       setUpdated(new Date())
