@@ -90,6 +90,7 @@ export default function RealHoldings() {
   const { dark } = useTheme()
   const [holdings, setHoldings]       = useState([])
   const [prices, setPrices]           = useState({})
+  const [pricesAsOf, setPricesAsOf]   = useState(null)
   const [chartData, setChartData]     = useState([])
   const [chartRange, setChartRange]   = useState(RANGES[2]) // default 1M
   const [chartLoading, setChartLoading] = useState(false)
@@ -125,8 +126,12 @@ export default function RealHoldings() {
   useEffect(() => {
     const symbols = holdings.map((h) => h.symbol)
     if (!symbols.length) return
-    refreshPrices(symbols).then(setPrices)
-    const t = setInterval(() => refreshPrices(symbols).then(setPrices), 30_000)
+    const load = () => refreshPrices(symbols).then(({ prices, asOf }) => {
+      setPrices(prices)
+      setPricesAsOf(asOf)
+    })
+    load()
+    const t = setInterval(load, 30_000)
     return () => clearInterval(t)
   }, [symbolsKey])
 
@@ -236,6 +241,11 @@ export default function RealHoldings() {
           {holdings.length > 0 && (
             <span className={`text-xs font-bold ${totalIsUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
               {totalIsUp ? '+' : ''}{usd(totalGain)} ({totalIsUp ? '+' : ''}{totalGainPct.toFixed(2)}%)
+            </span>
+          )}
+          {pricesAsOf && (
+            <span className="text-xs text-gray-300 dark:text-gray-700">
+              as of {pricesAsOf.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
         </div>

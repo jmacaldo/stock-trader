@@ -117,7 +117,11 @@ export default function StockQuote({ quote, onUpdate, onClose }) {
         <StockChart symbol={quote.symbol} />
       </Suspense>
 
-      <p className="text-xs text-gray-300 dark:text-gray-700 text-center">Auto-refreshes every 30s</p>
+      <p className="text-xs text-gray-300 dark:text-gray-700 text-center">
+        {quote.regularMarketTime
+          ? `as of ${new Date(quote.regularMarketTime * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`
+          : 'Auto-refreshes every 30s'}
+      </p>
     </div>
   )
 }

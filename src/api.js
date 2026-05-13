@@ -38,6 +38,7 @@ export async function fetchQuote(symbol) {
     regularMarketDayHigh: q.h ?? q.c,
     regularMarketDayLow: q.l ?? q.c,
     regularMarketVolume: null,
+    regularMarketTime: q.t ?? null,
     fiftyTwoWeekHigh: null,
     fiftyTwoWeekLow: null,
     marketCap: profile.marketCapitalization ? profile.marketCapitalization * 1e6 : null,
@@ -53,7 +54,7 @@ export async function fetchQuotes(symbols) {
         if (!res.ok) return null
         const q = await res.json()
         if (!q.c) return null
-        return { symbol: sym, regularMarketPrice: q.c, regularMarketChange: q.d ?? 0, regularMarketChangePercent: q.dp ?? 0 }
+        return { symbol: sym, regularMarketPrice: q.c, regularMarketChange: q.d ?? 0, regularMarketChangePercent: q.dp ?? 0, regularMarketTime: q.t ?? null }
       } catch {
         return null
       }

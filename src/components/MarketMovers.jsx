@@ -10,11 +10,13 @@ const WATCHLIST = [
 async function fetchMovers(count = 8) {
   const quotes = await fetchQuotes(WATCHLIST)
   const valid = quotes.filter((q) => q.regularMarketChangePercent != null)
-
   const sorted = [...valid].sort((a, b) => b.regularMarketChangePercent - a.regularMarketChangePercent)
+  const times = valid.map((q) => q.regularMarketTime).filter(Boolean)
+  const updatedAt = times.length ? new Date(Math.min(...times) * 1000) : new Date()
   return {
     gainers: sorted.slice(0, count),
     losers: sorted.slice(-count).reverse(),
+    updatedAt,
   }
 }
 
@@ -85,10 +87,10 @@ export default function MarketMovers({ onSelect }) {
     setLoading(true)
     setError(null)
     try {
-      const { gainers: g, losers: l } = await fetchMovers(8)
+      const { gainers: g, losers: l, updatedAt } = await fetchMovers(8)
       setGainers(g)
       setLosers(l)
-      setUpdated(new Date())
+      setUpdated(updatedAt)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -134,7 +136,7 @@ export default function MarketMovers({ onSelect }) {
           )}
           {updated && !loading && (
             <span className="text-xs text-gray-300 dark:text-gray-700">
-              {updated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+              as of {updated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
         </div>

@@ -52,5 +52,11 @@ export async function refreshPrices(symbols) {
     }
   }
 
-  return Object.fromEntries(symbols.map((sym) => [sym, stored[sym]?.price ?? null]))
+  const times = symbols.map((sym) => stored[sym]?.fetched_at).filter(Boolean).map((t) => new Date(t).getTime())
+  const asOf = times.length ? new Date(Math.min(...times)) : null
+
+  return {
+    prices: Object.fromEntries(symbols.map((sym) => [sym, stored[sym]?.price ?? null])),
+    asOf,
+  }
 }

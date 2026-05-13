@@ -25,11 +25,11 @@ export default function Portfolio({ onValueChange }) {
     const load = async () => {
       setLoading(true)
       try {
-        const map = await refreshPrices(symbols)
+        const { prices: map, asOf } = await refreshPrices(symbols)
         setPrices(map)
         const total = symbols.reduce((sum, sym) => sum + (portfolio[sym].shares * (map[sym] ?? portfolio[sym].avgCost)), 0)
         onValueChangeRef.current?.(total)
-        setLastUpdated(new Date())
+        setLastUpdated(asOf ?? new Date())
       } catch {
         const total = symbols.reduce((sum, sym) => sum + portfolio[sym].shares * portfolio[sym].avgCost, 0)
         onValueChangeRef.current?.(total)
@@ -84,7 +84,7 @@ export default function Portfolio({ onValueChange }) {
           {loading && <span className="text-xs text-gray-400 dark:text-gray-600">Updating...</span>}
           {lastUpdated && !loading && (
             <span className="text-xs text-gray-300 dark:text-gray-700">
-              Updated {lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+              as of {lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
         </div>
