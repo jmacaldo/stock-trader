@@ -22,7 +22,7 @@ export default function History() {
         <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Trade History</h2>
         <span className="text-xs text-gray-400 dark:text-gray-700">{trades.length} trade{trades.length !== 1 ? 's' : ''}</span>
       </div>
-      <div className="overflow-x-auto max-h-72 overflow-y-auto">
+      <div className="overflow-x-auto max-h-72 overflow-y-auto scrollbar-hide">
         <table className="w-full text-sm min-w-[480px]">
           <thead className="sticky top-0 bg-white dark:bg-gray-900 z-10">
             <tr className="text-xs text-gray-400 dark:text-gray-600 uppercase tracking-wide border-b border-gray-100 dark:border-gray-800/50">
