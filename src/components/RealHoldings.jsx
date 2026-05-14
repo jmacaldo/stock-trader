@@ -310,10 +310,79 @@ export default function RealHoldings() {
         </div>
       )}
 
+      {/* Performance chart — shown above table */}
+      {holdings.length > 0 && (chartLoading || chartData.length > 1) && (
+        <div className="border-b border-gray-100 dark:border-gray-800 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Real Performance</h3>
+              {chartData.length > 1 && (
+                <span className={`text-xs font-semibold ${chartIsUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {chartPnl >= 0 ? '+' : ''}{usd(chartPnl)} ({chartPnlPct >= 0 ? '+' : ''}{chartPnlPct.toFixed(2)}%)
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              {RANGES.map((r) => (
+                <button
+                  key={r.label}
+                  onClick={() => setChartRange(r)}
+                  className={`text-xs px-2 py-0.5 rounded font-medium transition-colors ${
+                    chartRange.label === r.label
+                      ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
+                      : 'text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400'
+                  }`}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="h-44">
+            {chartLoading ? (
+              <div className="h-full flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-gray-200 dark:border-gray-800 border-t-emerald-500 rounded-full animate-spin" />
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={stroke} stopOpacity={0.2} />
+                      <stop offset="100%" stopColor={stroke} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(d) => fmtTick(d, chartRange)}
+                    tick={{ fill: tickColor, fontSize: 10 }}
+                    axisLine={false} tickLine={false}
+                    interval="preserveStartEnd"
+                  />
+                  <YAxis
+                    tickFormatter={tickUsd}
+                    tick={{ fill: tickColor, fontSize: 10 }}
+                    axisLine={false} tickLine={false}
+                    width={48} domain={['auto', 'auto']}
+                  />
+                  <Tooltip content={<ChartTooltip range={chartRange} />} />
+                  <Area
+                    type="monotone" dataKey="value"
+                    stroke={stroke} strokeWidth={2}
+                    fill={`url(#${gradId})`}
+                    dot={false} activeDot={{ r: 4, fill: stroke, strokeWidth: 0 }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       {holdings.length > 0 && (
         <>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto scrollbar-hide">
             <table className="w-full text-sm min-w-[580px]">
               <thead>
                 <tr className="text-xs text-gray-400 dark:text-gray-600 uppercase tracking-wide border-b border-gray-100 dark:border-gray-800/50">
@@ -401,74 +470,6 @@ export default function RealHoldings() {
             </table>
           </div>
 
-          {/* Performance chart */}
-          {(chartLoading || chartData.length > 1) && (
-            <div className="border-t border-gray-100 dark:border-gray-800 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Performance</h3>
-                  {chartData.length > 1 && (
-                    <span className={`text-xs font-semibold ${chartIsUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                      {chartPnl >= 0 ? '+' : ''}{usd(chartPnl)} ({chartPnlPct >= 0 ? '+' : ''}{chartPnlPct.toFixed(2)}%)
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-1">
-                  {RANGES.map((r) => (
-                    <button
-                      key={r.label}
-                      onClick={() => setChartRange(r)}
-                      className={`text-xs px-2 py-0.5 rounded font-medium transition-colors ${
-                        chartRange.label === r.label
-                          ? 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
-                          : 'text-gray-400 dark:text-gray-600 hover:text-gray-600 dark:hover:text-gray-400'
-                      }`}
-                    >
-                      {r.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="h-44">
-                {chartLoading ? (
-                  <div className="h-full flex items-center justify-center">
-                    <div className="w-5 h-5 border-2 border-gray-200 dark:border-gray-800 border-t-emerald-500 rounded-full animate-spin" />
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor={stroke} stopOpacity={0.2} />
-                          <stop offset="100%" stopColor={stroke} stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis
-                        dataKey="date"
-                        tickFormatter={(d) => fmtTick(d, chartRange)}
-                        tick={{ fill: tickColor, fontSize: 10 }}
-                        axisLine={false} tickLine={false}
-                        interval="preserveStartEnd"
-                      />
-                      <YAxis
-                        tickFormatter={tickUsd}
-                        tick={{ fill: tickColor, fontSize: 10 }}
-                        axisLine={false} tickLine={false}
-                        width={48} domain={['auto', 'auto']}
-                      />
-                      <Tooltip content={<ChartTooltip range={chartRange} />} />
-                      <Area
-                        type="monotone" dataKey="value"
-                        stroke={stroke} strokeWidth={2}
-                        fill={`url(#${gradId})`}
-                        dot={false} activeDot={{ r: 4, fill: stroke, strokeWidth: 0 }}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </div>
-          )}
         </>
       )}
     </div>
