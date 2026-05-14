@@ -5,12 +5,10 @@ import { loadData, syncAccount } from './db'
 import { ThemeProvider } from './useTheme'
 import Header from './components/Header'
 import SearchModal from './components/SearchModal'
-import StockQuote from './components/StockQuote'
-import TradePanel from './components/TradePanel'
 import Portfolio from './components/Portfolio'
 import History from './components/History'
 
-const PortfolioChart  = lazy(() => import('./components/PortfolioChart'))
+const PortfolioChart = lazy(() => import('./components/PortfolioChart'))
 const RealHoldings   = lazy(() => import('./components/RealHoldings'))
 const MarketMovers   = lazy(() => import('./components/MarketMovers'))
 import ApiKeySetup from './components/ApiKeySetup'
@@ -20,9 +18,8 @@ import LoadingScreen from './components/LoadingScreen'
 // 'loading' | 'auth' | 'setup' | 'app'
 export default function App() {
   const [phase, setPhase] = useState('loading')
-  const [quote, setQuote] = useState(null)
   const [portfolioValue, setPortfolioValue] = useState(0)
-  const [showSearch, setShowSearch] = useState(false)
+  const [modalQuote, setModalQuote] = useState(null)
   const { setUserId, hydrateFromDb } = useStore()
 
   const loadUserData = async (userId) => {
@@ -31,7 +28,6 @@ export default function App() {
     if (data.account) {
       hydrateFromDb(data)
     } else {
-      // First sign-in: start with clean defaults, persist to DB
       useStore.setState({ balance: 10000, startingBalance: 10000, portfolio: {}, trades: [] })
       const { apiKey } = useStore.getState()
       await syncAccount(userId, 10000, 10000, apiKey)
@@ -51,7 +47,6 @@ export default function App() {
   }
 
   useEffect(() => {
-    // Check for an existing session on mount
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         await handleAuth(session.user.id)
@@ -60,19 +55,20 @@ export default function App() {
       }
     })
 
-    // Keep phase in sync when auth state changes externally (sign out, token expiry)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') {
         useStore.setState({ userId: null, portfolio: {}, trades: [], balance: 10000, startingBalance: 10000 })
         setPhase('auth')
-        setQuote(null)
+        setModalQuote(null)
       }
     })
     return () => subscription.unsubscribe()
   }, [])
 
-  // Called by ApiKeySetup after the key is saved
   const handleKeySet = () => setPhase('app')
+
+  const openModal = (quote = null) => setModalQuote(quote ?? true)
+  const closeModal = () => setModalQuote(null)
 
   return (
     <ThemeProvider>
@@ -81,44 +77,26 @@ export default function App() {
       {phase === 'setup' && <ApiKeySetup onDone={handleKeySet} />}
       {phase === 'app' && (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
-          <Header portfolioValue={portfolioValue} onSearchOpen={() => setShowSearch(true)} />
-          {showSearch && (
-            <SearchModal onSelect={setQuote} onClose={() => setShowSearch(false)} />
+          <Header portfolioValue={portfolioValue} onSearchOpen={() => openModal()} />
+
+          {modalQuote && (
+            <SearchModal
+              initialQuote={modalQuote === true ? null : modalQuote}
+              onClose={closeModal}
+            />
           )}
 
           <main className="max-w-7xl mx-auto p-4 lg:p-6 space-y-5">
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-              <div className="lg:col-span-2 space-y-4">
-                {quote ? (
-                  <>
-                    <StockQuote quote={quote} onUpdate={setQuote} onClose={() => setQuote(null)} />
-                    <TradePanel quote={quote} />
-                  </>
-                ) : (
-                  <div
-                    onClick={() => setShowSearch(true)}
-                    className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 border-dashed rounded-xl p-8 text-center cursor-pointer hover:border-gray-300 dark:hover:border-gray-700 transition-colors group"
-                  >
-                    <div className="text-3xl mb-3 opacity-40">📈</div>
-                    <p className="text-gray-400 dark:text-gray-500 text-sm">Select a stock to view its price and start trading</p>
-                    <p className="text-xs text-gray-300 dark:text-gray-600 mt-1 group-hover:text-gray-400 dark:group-hover:text-gray-500 transition-colors">Click to search</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="lg:col-span-3 space-y-4">
-                <Suspense fallback={null}>
-                  <PortfolioChart />
-                </Suspense>
-                <Portfolio onValueChange={setPortfolioValue} />
-                <History />
-              </div>
-            </div>
+            <Suspense fallback={null}>
+              <PortfolioChart />
+            </Suspense>
+            <Portfolio onValueChange={setPortfolioValue} />
+            <History />
             <Suspense fallback={null}>
               <RealHoldings />
             </Suspense>
             <Suspense fallback={null}>
-              <MarketMovers onSelect={setQuote} />
+              <MarketMovers onSelect={(quote) => openModal(quote)} />
             </Suspense>
           </main>
         </div>
