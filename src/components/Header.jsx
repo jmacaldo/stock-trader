@@ -42,7 +42,7 @@ export default function Header({ portfolioValue, onSearchOpen }) {
 
   return (
     <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-30">
-      <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
+      <div className="max-w-7xl mx-auto px-4 lg:px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">P</div>
           <div>
@@ -66,6 +66,11 @@ export default function Header({ portfolioValue, onSearchOpen }) {
         </div>
 
         <div className="flex items-center gap-2">
+           {userEmail && (
+            <span className="hidden sm:block text-xs text-gray-400 dark:text-gray-600 max-w-[140px] truncate" title={userEmail}>
+              {userEmail}
+            </span>
+          )}
           <button
             onClick={onSearchOpen}
             className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white rounded-lg transition-colors border border-gray-200 dark:border-gray-700 font-medium"
@@ -75,11 +80,6 @@ export default function Header({ portfolioValue, onSearchOpen }) {
             </svg>
             Search
           </button>
-          {userEmail && (
-            <span className="hidden sm:block text-xs text-gray-400 dark:text-gray-600 max-w-[140px] truncate" title={userEmail}>
-              {userEmail}
-            </span>
-          )}
           <button
             onClick={toggle}
             className="p-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 rounded-lg transition-colors border border-gray-200 dark:border-gray-700"
