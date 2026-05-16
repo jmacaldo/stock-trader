@@ -12,6 +12,7 @@ const PortfolioChart = lazy(() => import('./components/PortfolioChart'))
 const RealHoldings   = lazy(() => import('./components/RealHoldings'))
 const MarketMovers   = lazy(() => import('./components/MarketMovers'))
 const SearchWidget   = lazy(() => import('./components/SearchWidget'))
+const Watchlist      = lazy(() => import('./components/Watchlist'))
 import ApiKeySetup from './components/ApiKeySetup'
 import AuthScreen from './components/AuthScreen'
 import LoadingScreen from './components/LoadingScreen'
@@ -89,26 +90,28 @@ export default function App() {
             />
           )}
 
-          <main className="max-w-7xl mx-auto p-4 lg:p-6 space-y-5">
-            {view === 'holdings' ? (
+          <main className="max-w-7xl mx-auto p-4 lg:p-6">
+            <div className={`space-y-5${view !== 'holdings' ? ' hidden' : ''}`}>
               <Suspense fallback={null}>
                 <RealHoldings onSummaryChange={setRealSummary} />
               </Suspense>
-            ) : (
-              <>
-                <Suspense fallback={null}>
-                  <SearchWidget />
-                </Suspense>
-                <Suspense fallback={null}>
-                  <PortfolioChart />
-                </Suspense>
-                <Portfolio onValueChange={setPortfolioValue} />
-                <History />
-                <Suspense fallback={null}>
-                  <MarketMovers onSelect={(quote) => openModal(quote)} />
-                </Suspense>
-              </>
-            )}
+              <Suspense fallback={null}>
+                <Watchlist />
+              </Suspense>
+            </div>
+            <div className={`space-y-5${view === 'holdings' ? ' hidden' : ''}`}>
+              <Suspense fallback={null}>
+                <SearchWidget />
+              </Suspense>
+              <Suspense fallback={null}>
+                <PortfolioChart />
+              </Suspense>
+              <Portfolio onValueChange={setPortfolioValue} />
+              <History />
+              <Suspense fallback={null}>
+                <MarketMovers onSelect={(quote) => openModal(quote)} />
+              </Suspense>
+            </div>
           </main>
         </div>
       )}
