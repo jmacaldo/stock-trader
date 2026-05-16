@@ -85,7 +85,7 @@ function ChartTooltip({ active, payload, label, range }) {
 
 const EMPTY_FORM = { symbol: '', shares: '', cash: '' }
 
-export default function RealHoldings() {
+export default function RealHoldings({ onSummaryChange }) {
   const { userId } = useStore()
   const { dark } = useTheme()
   const [holdings, setHoldings]       = useState([])
@@ -220,6 +220,10 @@ export default function RealHoldings() {
   const totalGain      = totalValue - totalInvested
   const totalGainPct   = totalInvested > 0 ? (totalGain / totalInvested) * 100 : 0
   const totalIsUp      = totalGain >= 0
+
+  useEffect(() => {
+    onSummaryChange?.({ totalValue, totalGain, totalGainPct, totalInvested })
+  }, [totalValue, totalGain, totalGainPct, totalInvested])
 
   const first      = chartData[0]?.value ?? 0
   const last       = chartData[chartData.length - 1]?.value ?? 0

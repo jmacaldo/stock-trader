@@ -8,7 +8,7 @@ const fmtShares = (n) =>
   n < 0.0001 ? '0' : n < 1 ? n.toFixed(6) : n < 1000 ? n.toFixed(4) : n.toLocaleString('en-US', { maximumFractionDigits: 4 })
 
 export default function TradePanel({ quote }) {
-  const { balance, portfolio, buyStock, sellStock } = useStore()
+  const { portfolio, buyStock, sellStock } = useStore()
   const [mode, setMode] = useState('BUY')
   const [amount, setAmount] = useState('')
   const [msg, setMsg] = useState(null)
@@ -21,7 +21,6 @@ export default function TradePanel({ quote }) {
 
   const dollars = parseFloat(amount) || 0
   const estimatedShares = price > 0 ? dollars / price : 0
-  const afterCash = balance - dollars
   const afterValue = holdingValue - dollars
 
   const notify = (type, text) => {
@@ -31,7 +30,6 @@ export default function TradePanel({ quote }) {
 
   const handleTrade = () => {
     if (!dollars || dollars <= 0) return notify('error', 'Enter a dollar amount')
-    if (mode === 'BUY' && dollars > balance) return notify('error', 'Amount exceeds available cash')
     if (mode === 'SELL' && dollars > holdingValue + 0.01)
       return notify('error', `Amount exceeds position value (${usd(holdingValue)})`)
 
@@ -91,21 +89,18 @@ export default function TradePanel({ quote }) {
             className="w-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg pl-7 pr-14 py-3 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 transition-colors text-sm placeholder-gray-400 dark:placeholder-gray-500"
           />
           <button
-            onClick={() => setAmount(
-              mode === 'BUY'
-                ? balance.toFixed(2)
-                : holdingValue.toFixed(2)
-            )}
+            onClick={() => setAmount(holdingValue.toFixed(2))}
+            className={mode === 'BUY' ? 'hidden' : ''}
             className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-semibold transition-colors px-1"
           >
             MAX
           </button>
         </div>
-        <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">
-          {mode === 'BUY'
-            ? `Available: ${usd(balance)}`
-            : holding ? `Position value: ${usd(holdingValue)}` : 'No position'}
-        </p>
+        {mode === 'SELL' && (
+          <p className="text-xs text-gray-400 dark:text-gray-600 mt-1">
+            {holding ? `Position value: ${usd(holdingValue)}` : 'No position'}
+          </p>
+        )}
       </div>
 
       <div className="bg-gray-50 dark:bg-gray-800/40 rounded-lg px-3 py-3 space-y-2 text-sm">
@@ -121,15 +116,11 @@ export default function TradePanel({ quote }) {
           <span className="text-gray-600 dark:text-gray-300">{mode === 'BUY' ? 'Total cost' : 'Proceeds'}</span>
           <span className="text-gray-900 dark:text-white tabular-nums">{dollars > 0 ? usd(dollars) : '—'}</span>
         </div>
-        {dollars > 0 && (
+        {dollars > 0 && mode === 'SELL' && (
           <div className="flex justify-between text-xs text-gray-400 dark:text-gray-500">
-            <span>{mode === 'BUY' ? 'Cash after' : 'Position after'}</span>
-            <span className={
-              (mode === 'BUY' ? afterCash : afterValue) < -0.01
-                ? 'text-red-500 dark:text-red-400'
-                : 'text-gray-400 dark:text-gray-400'
-            }>
-              {mode === 'BUY' ? usd(Math.max(afterCash, 0)) : usd(Math.max(afterValue, 0))}
+            <span>Position after</span>
+            <span className={afterValue < -0.01 ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-gray-400'}>
+              {usd(Math.max(afterValue, 0))}
             </span>
           </div>
         )}

@@ -11,6 +11,7 @@ import History from './components/History'
 const PortfolioChart = lazy(() => import('./components/PortfolioChart'))
 const RealHoldings   = lazy(() => import('./components/RealHoldings'))
 const MarketMovers   = lazy(() => import('./components/MarketMovers'))
+const SearchWidget   = lazy(() => import('./components/SearchWidget'))
 import ApiKeySetup from './components/ApiKeySetup'
 import AuthScreen from './components/AuthScreen'
 import LoadingScreen from './components/LoadingScreen'
@@ -18,7 +19,9 @@ import LoadingScreen from './components/LoadingScreen'
 // 'loading' | 'auth' | 'setup' | 'app'
 export default function App() {
   const [phase, setPhase] = useState('loading')
+  const [view, setView] = useState('holdings')
   const [portfolioValue, setPortfolioValue] = useState(0)
+  const [realSummary, setRealSummary] = useState(null)
   const [modalQuote, setModalQuote] = useState(null)
   const { setUserId, hydrateFromDb } = useStore()
 
@@ -77,7 +80,7 @@ export default function App() {
       {phase === 'setup' && <ApiKeySetup onDone={handleKeySet} />}
       {phase === 'app' && (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
-          <Header portfolioValue={portfolioValue} onSearchOpen={() => openModal()} />
+          <Header realSummary={realSummary} view={view} onViewChange={setView} />
 
           {modalQuote && (
             <SearchModal
@@ -87,17 +90,25 @@ export default function App() {
           )}
 
           <main className="max-w-7xl mx-auto p-4 lg:p-6 space-y-5">
-            <Suspense fallback={null}>
-              <PortfolioChart />
-            </Suspense>
-            <Portfolio onValueChange={setPortfolioValue} />
-            <History />
-            <Suspense fallback={null}>
-              <RealHoldings />
-            </Suspense>
-            <Suspense fallback={null}>
-              <MarketMovers onSelect={(quote) => openModal(quote)} />
-            </Suspense>
+            {view === 'holdings' ? (
+              <Suspense fallback={null}>
+                <RealHoldings onSummaryChange={setRealSummary} />
+              </Suspense>
+            ) : (
+              <>
+                <Suspense fallback={null}>
+                  <SearchWidget />
+                </Suspense>
+                <Suspense fallback={null}>
+                  <PortfolioChart />
+                </Suspense>
+                <Portfolio onValueChange={setPortfolioValue} />
+                <History />
+                <Suspense fallback={null}>
+                  <MarketMovers onSelect={(quote) => openModal(quote)} />
+                </Suspense>
+              </>
+            )}
           </main>
         </div>
       )}

@@ -55,7 +55,6 @@ export const useStore = create(
       buyStock: (symbol, name, shares, price) => {
         const { balance, portfolio, userId, startingBalance, apiKey } = get()
         const cost = parseFloat((shares * price).toFixed(2))
-        if (cost > balance) return { error: 'Insufficient funds' }
 
         const existing = portfolio[symbol]
         const totalShares = parseFloat(((existing?.shares ?? 0) + shares).toFixed(8))
@@ -63,7 +62,6 @@ export const useStore = create(
           ? parseFloat(((existing.shares * existing.avgCost + cost) / totalShares).toFixed(6))
           : price
 
-        const newBalance = parseFloat((balance - cost).toFixed(2))
         const newPosition = { name, shares: totalShares, avgCost }
         const trade = {
           id: `${Date.now()}-${Math.random()}`,
@@ -72,14 +70,13 @@ export const useStore = create(
         }
 
         set({
-          balance: newBalance,
           portfolio: { ...portfolio, [symbol]: newPosition },
           trades: [trade, ...get().trades],
         })
 
         if (userId) {
           Promise.all([
-            syncAccount(userId, newBalance, startingBalance, apiKey),
+            syncAccount(userId, balance, startingBalance, apiKey),
             syncPosition(userId, symbol, newPosition),
             insertTrade(userId, trade),
           ]).catch(console.error)

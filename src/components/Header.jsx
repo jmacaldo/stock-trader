@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { useStore } from '../store'
 import { supabase } from '../supabase'
 import { useTheme } from '../useTheme'
 
@@ -24,8 +23,7 @@ function MoonIcon() {
   )
 }
 
-export default function Header({ portfolioValue, onSearchOpen }) {
-  const { balance, startingBalance } = useStore()
+export default function Header({ realSummary, view, onViewChange }) {
   const { dark, toggle } = useTheme()
   const [userEmail, setUserEmail] = useState(null)
 
@@ -35,9 +33,9 @@ export default function Header({ portfolioValue, onSearchOpen }) {
 
   const handleSignOut = () => supabase.auth.signOut()
 
-  const totalValue = balance + (portfolioValue ?? 0)
-  const pnl = totalValue - startingBalance
-  const pnlPct = startingBalance > 0 ? (pnl / startingBalance) * 100 : 0
+  const totalValue = realSummary?.totalValue ?? 0
+  const pnl = realSummary?.totalGain ?? 0
+  const pnlPct = realSummary?.totalGainPct ?? 0
   const isUp = pnl >= 0
 
   return (
@@ -52,17 +50,29 @@ export default function Header({ portfolioValue, onSearchOpen }) {
         </div>
 
         <div className="flex items-center gap-5 flex-wrap">
-          <Stat label="Cash" value={usd(balance)} />
-          <div className="w-px h-8 bg-gray-200 dark:bg-gray-800" />
-          <Stat label="Holdings" value={usd(portfolioValue ?? 0)} />
-          <div className="w-px h-8 bg-gray-200 dark:bg-gray-800" />
-          <Stat label="Total Value" value={usd(totalValue)} emphasis />
+          <Stat label="Total Value" value={realSummary ? usd(totalValue) : '—'} emphasis />
           <div className="w-px h-8 bg-gray-200 dark:bg-gray-800" />
           <Stat
             label="Total P&L"
-            value={`${isUp ? '+' : ''}${usd(pnl)} (${isUp ? '+' : ''}${pnlPct.toFixed(2)}%)`}
+            value={realSummary ? `${isUp ? '+' : ''}${usd(pnl)} (${isUp ? '+' : ''}${pnlPct.toFixed(2)}%)` : '—'}
             color={isUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}
           />
+        </div>
+
+        <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5 border border-gray-200 dark:border-gray-700">
+          {[{ id: 'holdings', label: 'Real' }, { id: 'dashboard', label: 'Paper' }].map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => onViewChange(id)}
+              className={`text-xs px-3 py-1.5 rounded-md font-medium transition-colors ${
+                view === id
+                  ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         <div className="flex items-center gap-2">
@@ -71,15 +81,6 @@ export default function Header({ portfolioValue, onSearchOpen }) {
               {userEmail}
             </span>
           )}
-          <button
-            onClick={onSearchOpen}
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white rounded-lg transition-colors border border-gray-200 dark:border-gray-700 font-medium"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            Search
-          </button>
           <button
             onClick={toggle}
             className="p-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 rounded-lg transition-colors border border-gray-200 dark:border-gray-700"
