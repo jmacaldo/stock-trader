@@ -6,8 +6,109 @@ import { refreshPrices } from '../prices'
 import { useTheme } from '../useTheme'
 import { fetchQuote } from '../api'
 
-const PROXY = `${SUPABASE_URL}/functions/v1/yahoo-chart`
-const AUTH  = { Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+const PROXY       = `${SUPABASE_URL}/functions/v1/yahoo-chart`
+const QUOTES_URL  = `${SUPABASE_URL}/functions/v1/yahoo-quotes`
+const AUTH        = { Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+
+async function fetchEnrichedQuotes(symbols) {
+  if (!symbols.length) return {}
+  try {
+    const res = await fetch(`${QUOTES_URL}?symbols=${symbols.join(',')}`, { headers: AUTH })
+    if (!res.ok) return Object.fromEntries(symbols.map((s) => [s, null]))
+    const { quotes } = await res.json()
+    const result = Object.fromEntries((quotes ?? []).map((q) => [q.symbol, q]))
+    // Mark any symbol not returned as null (not undefined) so we know the fetch finished
+    for (const s of symbols) if (!(s in result)) result[s] = null
+    return result
+  } catch {
+    return Object.fromEntries(symbols.map((s) => [s, null]))
+  }
+}
+
+function computeHoldingSignal(q, { netInvested, netShares }) {
+  if (!q || !netShares || netShares < 0.000001) return null
+
+  const {
+    regularMarketPrice, regularMarketChangePercent,
+    regularMarketVolume, averageDailyVolume3Month,
+    regularMarketDayHigh, regularMarketDayLow,
+    fiftyTwoWeekHigh, fiftyTwoWeekLow,
+  } = q
+
+  if (!averageDailyVolume3Month || !regularMarketDayHigh || !regularMarketDayLow) return null
+
+  const relVol       = regularMarketVolume / averageDailyVolume3Month
+  const dayRange     = regularMarketDayHigh - regularMarketDayLow
+  const intradayPos  = dayRange > 0 ? (regularMarketPrice - regularMarketDayLow) / dayRange : 0.5
+  const fiftyTwoRange = (fiftyTwoWeekHigh ?? 0) - (fiftyTwoWeekLow ?? 0)
+  const fiftyTwoPos  = fiftyTwoRange > 0 ? (regularMarketPrice - fiftyTwoWeekLow) / fiftyTwoRange : 0.5
+  const changePct    = regularMarketChangePercent ?? 0
+
+  const averageCost  = netInvested / netShares
+  const currentValue = regularMarketPrice * netShares
+  const totalReturn  = netInvested > 0 ? ((currentValue - netInvested) / netInvested) * 100 : 0
+
+  let confidence
+  if (relVol >= 3.0 && (intradayPos > 0.75 || intradayPos < 0.25)) confidence = 'high'
+  else if (relVol >= 2.0 && (intradayPos >= 0.65 || intradayPos <= 0.35)) confidence = 'medium'
+  else confidence = 'low'
+
+  let signal, reason
+
+  // SELL — any condition true
+  if ((intradayPos <= 0.35 && relVol >= 2.0) || totalReturn <= -15 || (fiftyTwoPos <= 0.15 && changePct < 0)) {
+    signal = 'SELL'
+    if (totalReturn <= -15)
+      reason = `Position is down ${Math.abs(totalReturn).toFixed(1)}% from cost basis — thesis needs re-evaluation.`
+    else if (fiftyTwoPos <= 0.15 && changePct < 0)
+      reason = `Trading near 52-week lows with continued selling pressure.`
+    else
+      reason = `High-volume fade at day lows suggests distribution; avg cost ${usd(averageCost)}.`
+  }
+  // TRIM
+  else if ((totalReturn >= 30 && intradayPos <= 0.50) || (fiftyTwoPos >= 0.90 && intradayPos <= 0.40)) {
+    signal = 'TRIM'
+    if (totalReturn >= 30 && intradayPos <= 0.50)
+      reason = `Up ${totalReturn.toFixed(1)}% from cost — consider locking in partial gains on today's weakness.`
+    else
+      reason = `Near 52-week highs but fading today; consider trimming into strength.`
+  }
+  // ADD
+  else if (relVol >= 2.0 && intradayPos >= 0.65 && changePct > 0 && totalReturn > -5) {
+    signal = 'ADD'
+    reason = `Holding near day highs on ${relVol.toFixed(1)}× volume; avg cost ${usd(averageCost)}.`
+  }
+  // WATCH — notable activity but mixed
+  else if (relVol >= 2.0 || Math.abs(changePct) > 3) {
+    signal = 'WATCH'
+    confidence = 'low'
+    reason = `Notable activity (${relVol.toFixed(1)}× vol, ${changePct >= 0 ? '+' : ''}${changePct.toFixed(1)}% today) but no clear directional read.`
+  }
+  // HOLD
+  else {
+    signal = 'HOLD'
+    confidence = 'low'
+    reason = `No unusual volume or directional pressure; position at ${totalReturn >= 0 ? '+' : ''}${totalReturn.toFixed(1)}% from cost.`
+  }
+
+  return {
+    signal, confidence, reason,
+    relativeVolume:       parseFloat(relVol.toFixed(2)),
+    intradayPosition:     parseFloat(intradayPos.toFixed(2)),
+    fiftyTwoWeekPosition: parseFloat(fiftyTwoPos.toFixed(2)),
+    totalReturn:          parseFloat(totalReturn.toFixed(1)),
+  }
+}
+
+const SIGNAL_STYLES = {
+  ADD:  { badge: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400', bar: 'bg-emerald-50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-400' },
+  HOLD: { badge: 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400',               bar: 'bg-gray-50 dark:bg-gray-800/30 text-gray-500 dark:text-gray-400' },
+  SELL: { badge: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',                bar: 'bg-red-50 dark:bg-red-900/10 text-red-700 dark:text-red-400' },
+  TRIM: { badge: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',        bar: 'bg-amber-50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400' },
+  WATCH:{ badge: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',            bar: 'bg-blue-50 dark:bg-blue-900/10 text-blue-700 dark:text-blue-400' },
+}
+
+const CONFIDENCE_LABEL = { high: '●●●', medium: '●●○', low: '●○○' }
 
 const RANGES = [
   { label: '1D', range: '1d',  interval: '60m' },
@@ -103,6 +204,7 @@ export default function RealHoldings({ onSummaryChange }) {
   const [submitting, setSubmitting]         = useState(false)
   const [formError, setFormError]           = useState(null)
   const [deleting, setDeleting]             = useState(null)
+  const [enrichedData, setEnrichedData]     = useState({})
   const tickColor = dark ? '#4b5563' : '#9ca3af'
 
   // Load all transactions from DB
@@ -130,13 +232,24 @@ export default function RealHoldings({ onSummaryChange }) {
   // Aggregate net positions per symbol (buys - sells)
   const positionMap = {}
   for (const t of transactions) {
-    if (!positionMap[t.symbol]) positionMap[t.symbol] = { shares: 0, name: t.name }
-    if (t.type === 'buy') positionMap[t.symbol].shares += t.shares
-    else positionMap[t.symbol].shares -= t.shares
+    if (!positionMap[t.symbol]) positionMap[t.symbol] = { shares: 0, name: t.name, netInvested: 0 }
+    if (t.type === 'buy') { positionMap[t.symbol].shares += t.shares; positionMap[t.symbol].netInvested += t.cashInvested }
+    else                  { positionMap[t.symbol].shares -= t.shares; positionMap[t.symbol].netInvested -= t.cashInvested }
   }
   const activePositions = Object.entries(positionMap)
     .filter(([, p]) => p.shares > 0.000001)
     .map(([symbol, p]) => ({ symbol, shares: p.shares, name: p.name }))
+
+  // Pre-compute signals for all active positions
+  const positionSignals = {}
+  for (const [symbol, pos] of Object.entries(positionMap)) {
+    if (pos.shares > 0.000001 && enrichedData[symbol]) {
+      positionSignals[symbol] = computeHoldingSignal(enrichedData[symbol], {
+        netInvested: pos.netInvested,
+        netShares: pos.shares,
+      })
+    }
+  }
 
   // Refresh prices every 30s using net positions
   const symbolsKey = activePositions.map((p) => p.symbol).sort().join(',')
@@ -149,6 +262,15 @@ export default function RealHoldings({ onSummaryChange }) {
     })
     load()
     const t = setInterval(load, 30_000)
+    return () => clearInterval(t)
+  }, [symbolsKey])
+
+  // Fetch enriched signal data (volume, 52wk range, etc.) — refresh every 5 min
+  useEffect(() => {
+    const symbols = activePositions.map((p) => p.symbol)
+    if (!symbols.length) { setEnrichedData({}); return }
+    fetchEnrichedQuotes(symbols).then(setEnrichedData)
+    const t = setInterval(() => fetchEnrichedQuotes(symbols).then(setEnrichedData), 300_000)
     return () => clearInterval(t)
   }, [symbolsKey])
 
@@ -468,7 +590,17 @@ export default function RealHoldings({ onSummaryChange }) {
                   </td>
                   <td className="px-4 py-3">
                     <button onClick={() => setSelectedSymbol(tx.symbol)} className="text-left group">
-                      <div className="font-mono font-bold text-gray-900 dark:text-white text-sm group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{tx.symbol}</div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="font-mono font-bold text-gray-900 dark:text-white text-sm group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{tx.symbol}</div>
+                        {positionSignals[tx.symbol] && (() => {
+                          const sig = positionSignals[tx.symbol]
+                          return (
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-bold ${SIGNAL_STYLES[sig.signal].badge}`}>
+                              {sig.signal}
+                            </span>
+                          )
+                        })()}
+                      </div>
                       {tx.name && <div className="text-xs text-gray-400 dark:text-gray-600 truncate max-w-[130px]">{tx.name}</div>}
                     </button>
                   </td>
@@ -541,6 +673,8 @@ export default function RealHoldings({ onSummaryChange }) {
         const pnl = currentValue != null ? currentValue - netInvested : null
         const pnlPct = pnl != null && netInvested > 0 ? (pnl / netInvested) * 100 : null
         const isUp = (pnl ?? 0) >= 0
+        const signal = positionSignals[selectedSymbol] ?? null
+        const sigStyle = signal ? SIGNAL_STYLES[signal.signal] : null
 
         return (
           <div
@@ -590,6 +724,29 @@ export default function RealHoldings({ onSummaryChange }) {
                     {isUp ? '+' : ''}{usd(pnl)}
                     {pnlPct != null && <span className="ml-2 text-xs opacity-75">({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)</span>}
                   </span>
+                </div>
+              )}
+
+              {/* Signal */}
+              {signal && sigStyle && (
+                <div className={`px-5 py-3 border-b border-gray-100 dark:border-gray-800 ${sigStyle.bar}`}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded text-xs font-bold ${sigStyle.badge}`}>{signal.signal}</span>
+                      <span className="text-xs opacity-60" title={`Confidence: ${signal.confidence}`}>{CONFIDENCE_LABEL[signal.confidence]}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs opacity-70 tabular-nums">
+                      <span title="Relative volume">{signal.relativeVolume}× vol</span>
+                      <span title="Intraday position">{(signal.intradayPosition * 100).toFixed(0)}% of range</span>
+                      <span title="52-week position">{(signal.fiftyTwoWeekPosition * 100).toFixed(0)}% of 52wk</span>
+                    </div>
+                  </div>
+                  <p className="text-xs opacity-80 leading-relaxed">{signal.reason}</p>
+                </div>
+              )}
+              {!signal && !(selectedSymbol in enrichedData) && (
+                <div className="px-5 py-2.5 text-xs text-gray-400 dark:text-gray-600 border-b border-gray-100 dark:border-gray-800 animate-pulse">
+                  Loading signal…
                 </div>
               )}
 

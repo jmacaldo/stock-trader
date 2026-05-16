@@ -65,14 +65,18 @@ export default function Portfolio({ onValueChange }) {
     const value = shares * current
     const cost = shares * avgCost
     const pnl = value - cost
+    const purchVal = cost * shares
     const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0
     const change = prices[sym] ? (prices[sym] - avgCost) / avgCost * 100 : 0
     totalValue += value
     totalCost += cost
     totalPnl += pnl
-    return { sym, shares, avgCost, name, current, value, cost, pnl, pnlPct, change }
+    return { sym, shares, avgCost, name, purchVal, current, value, cost, pnl, pnlPct, change }
+    console.log("this is a test" );
   })
 
+  
+  
   return (
     <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
@@ -96,9 +100,9 @@ export default function Portfolio({ onValueChange }) {
             <tr className="text-xs text-gray-400 dark:text-gray-600 uppercase tracking-wide border-b border-gray-100 dark:border-gray-800/50">
               <th className="text-left px-4 py-2.5 font-medium">Symbol</th>
               <th className="text-right px-4 py-2.5 font-medium">Shares</th>
-              <th className="text-right px-4 py-2.5 font-medium">Avg Cost</th>
-              <th className="text-right px-4 py-2.5 font-medium">Price</th>
-              <th className="text-right px-4 py-2.5 font-medium">Value</th>
+              <th className="text-right px-4 py-2.5 font-medium">Cost</th>
+              <th className="text-right px-4 py-2.5 font-medium">Live Price</th>
+              <th className="text-right px-4 py-2.5 font-medium">Live Value</th>
               <th className="text-right px-4 py-2.5 font-medium">P&L</th>
             </tr>
           </thead>

@@ -1,23 +1,64 @@
 import { useState, useEffect } from 'react'
-import { fetchQuote, fetchQuotes } from '../api'
+import { fetchQuote } from '../api'
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../supabase'
 
-const WATCHLIST = [
-  'AAPL','MSFT','NVDA','AMZN','GOOGL','META','TSLA','JPM','V','UNH',
-  'XOM','JNJ','WMT','MA','PG','LLY','HD','CVX','MRK','ABBV',
-  'AVGO','COST','KO','ADBE','CSCO','BAC','CRM','NFLX','AMD','DIS',
-]
+const MOVERS_URL = `${SUPABASE_URL}/functions/v1/yahoo-movers`
+const AUTH = { Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
 
-async function fetchMovers(count = 8) {
-  const quotes = await fetchQuotes(WATCHLIST)
-  const valid = quotes.filter((q) => q.regularMarketChangePercent != null)
-  const sorted = [...valid].sort((a, b) => b.regularMarketChangePercent - a.regularMarketChangePercent)
-  const times = valid.map((q) => q.regularMarketTime).filter(Boolean)
+async function fetchMovers(count = 10) {
+  const res = await fetch(`${MOVERS_URL}?count=${count}`, { headers: AUTH })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const { gainers, losers } = await res.json()
+  const times = [...gainers, ...losers].map((q) => q.regularMarketTime).filter(Boolean)
   const updatedAt = times.length ? new Date(Math.min(...times) * 1000) : new Date()
-  return {
-    gainers: sorted.slice(0, count),
-    losers: sorted.slice(-count).reverse(),
-    updatedAt,
-  }
+  return { gainers, losers, updatedAt }
+}
+
+function computeSignal(q) {
+  const { regularMarketVolume, averageDailyVolume3Month, regularMarketPrice,
+          regularMarketDayHigh, regularMarketDayLow, regularMarketChangePercent } = q
+
+  if (!averageDailyVolume3Month || !regularMarketDayHigh || !regularMarketDayLow) return null
+
+  const relVol       = regularMarketVolume / averageDailyVolume3Month
+  const dayRange     = regularMarketDayHigh - regularMarketDayLow
+  const intradayPos  = dayRange > 0 ? (regularMarketPrice - regularMarketDayLow) / dayRange : 0.5
+  const changePct    = regularMarketChangePercent ?? 0
+
+  if (relVol >= 2.0 && intradayPos >= 0.65 && changePct > 0)  return 'BUY'
+  if (relVol >= 2.0 && intradayPos <= 0.35 && changePct > 0)  return 'SELL'
+  if (relVol >= 2.0 && intradayPos <= 0.35 && changePct < 0)  return 'SHORT'
+  if (relVol < 1.5 || (intradayPos > 0.35 && intradayPos < 0.65)) return 'AVOID'
+  if (relVol >= 2.0) return 'WATCH'
+  return 'WATCH'
+}
+
+const SIGNAL_STYLES = {
+  BUY:   'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
+  SELL:  'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+  SHORT: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+  AVOID: 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600',
+  WATCH: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
+}
+
+function SignalBadge({ q }) {
+  const signal = computeSignal(q)
+  if (!signal) return <span className="text-gray-300 dark:text-gray-700 text-xs">—</span>
+
+  const relVol = q.averageDailyVolume3Month
+    ? (q.regularMarketVolume / q.averageDailyVolume3Month).toFixed(1)
+    : null
+
+  return (
+    <div className="flex flex-col items-end gap-0.5">
+      <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-bold ${SIGNAL_STYLES[signal]}`}>
+        {signal}
+      </span>
+      {relVol && (
+        <span className="text-xs text-gray-300 dark:text-gray-700 tabular-nums">{relVol}×</span>
+      )}
+    </div>
+  )
 }
 
 function MoverRow({ q, isLoss, selecting, onSelect }) {
@@ -48,6 +89,9 @@ function MoverRow({ q, isLoss, selecting, onSelect }) {
       <td className={`px-3 py-2.5 text-right text-xs tabular-nums font-bold ${clr}`}>
         {changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}%
       </td>
+      <td className="px-3 py-2.5 text-right">
+        <SignalBadge q={q} />
+      </td>
     </tr>
   )
 }
@@ -70,6 +114,7 @@ const THead = () => (
       <th className="text-right px-3 py-1.5 font-medium">Price</th>
       <th className="text-right px-3 py-1.5 font-medium">Change</th>
       <th className="text-right px-3 py-1.5 font-medium">%</th>
+      <th className="text-right px-3 py-1.5 font-medium">Signal</th>
     </tr>
   </thead>
 )
@@ -87,7 +132,7 @@ export default function MarketMovers({ onSelect }) {
     setLoading(true)
     setError(null)
     try {
-      const { gainers: g, losers: l, updatedAt } = await fetchMovers(8)
+      const { gainers: g, losers: l, updatedAt } = await fetchMovers(10)
       setGainers(g)
       setLosers(l)
       setUpdated(updatedAt)
@@ -161,10 +206,7 @@ export default function MarketMovers({ onSelect }) {
         <div className="py-10 text-center space-y-2">
           <p className="text-xs text-gray-400 dark:text-gray-600">Could not load market data</p>
           <p className="text-xs text-gray-300 dark:text-gray-700 max-w-xs mx-auto">{error}</p>
-          <button
-            onClick={load}
-            className="text-xs text-blue-500 hover:text-blue-400 transition-colors"
-          >
+          <button onClick={load} className="text-xs text-blue-500 hover:text-blue-400 transition-colors">
             Try again
           </button>
         </div>
