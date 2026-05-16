@@ -80,7 +80,7 @@ export default function App() {
       {phase === 'setup' && <ApiKeySetup onDone={handleKeySet} />}
       {phase === 'app' && (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
-          <Header realSummary={realSummary} view={view} onViewChange={setView} />
+          <Header portfolioValue={portfolioValue} realSummary={realSummary} view={view} onViewChange={setView} />
 
           {modalQuote && (
             <SearchModal

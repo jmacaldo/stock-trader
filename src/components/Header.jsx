@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useStore } from '../store'
 import { supabase } from '../supabase'
 import { useTheme } from '../useTheme'
 
@@ -23,7 +24,8 @@ function MoonIcon() {
   )
 }
 
-export default function Header({ realSummary, view, onViewChange }) {
+export default function Header({ portfolioValue, realSummary, view, onViewChange }) {
+  const { startingBalance } = useStore()
   const { dark, toggle } = useTheme()
   const [userEmail, setUserEmail] = useState(null)
 
@@ -33,10 +35,14 @@ export default function Header({ realSummary, view, onViewChange }) {
 
   const handleSignOut = () => supabase.auth.signOut()
 
-  const totalValue = realSummary?.totalValue ?? 0
-  const pnl = realSummary?.totalGain ?? 0
-  const pnlPct = realSummary?.totalGainPct ?? 0
+  const isPaper = view === 'dashboard'
+  const totalValue = isPaper ? (portfolioValue ?? 0) : (realSummary?.totalValue ?? 0)
+  const pnl       = isPaper ? (portfolioValue ?? 0) - startingBalance : (realSummary?.totalGain ?? 0)
+  const pnlPct    = isPaper
+    ? (startingBalance > 0 ? (pnl / startingBalance) * 100 : 0)
+    : (realSummary?.totalGainPct ?? 0)
   const isUp = pnl >= 0
+  const hasData = isPaper ? true : !!realSummary
 
   return (
     <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-30">
@@ -50,11 +56,11 @@ export default function Header({ realSummary, view, onViewChange }) {
         </div>
 
         <div className="flex items-center gap-5 flex-wrap">
-          <Stat label="Total Value" value={realSummary ? usd(totalValue) : '—'} emphasis />
+          <Stat label="Total Value" value={hasData ? usd(totalValue) : '—'} emphasis />
           <div className="w-px h-8 bg-gray-200 dark:bg-gray-800" />
           <Stat
             label="Total P&L"
-            value={realSummary ? `${isUp ? '+' : ''}${usd(pnl)} (${isUp ? '+' : ''}${pnlPct.toFixed(2)}%)` : '—'}
+            value={hasData ? `${isUp ? '+' : ''}${usd(pnl)} (${isUp ? '+' : ''}${pnlPct.toFixed(2)}%)` : '—'}
             color={isUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}
           />
         </div>

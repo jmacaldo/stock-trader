@@ -29,9 +29,9 @@ const tickUsd = (v) => {
   return `$${v.toFixed(0)}`
 }
 
-async function fetchChartHistory(holdings, range) {
+async function fetchChartHistory(positions, range) {
   const byKey = {}
-  for (const { symbol, shares } of holdings) {
+  for (const { symbol, shares } of positions) {
     try {
       const res = await fetch(
         `${PROXY}?symbol=${symbol}&range=${range.range}&interval=${range.interval}`,
@@ -83,49 +83,66 @@ function ChartTooltip({ active, payload, label, range }) {
   )
 }
 
-const EMPTY_FORM = { symbol: '', shares: '', cash: '' }
+const today = () => new Date().toISOString().split('T')[0]
+const EMPTY_FORM = { symbol: '', shares: '', cash: '', date: today(), type: 'buy' }
 
 export default function RealHoldings({ onSummaryChange }) {
   const { userId } = useStore()
   const { dark } = useTheme()
-  const [holdings, setHoldings]       = useState([])
-  const [prices, setPrices]           = useState({})
-  const [pricesAsOf, setPricesAsOf]   = useState(null)
-  const [chartData, setChartData]     = useState([])
-  const [chartRange, setChartRange]   = useState(RANGES[2]) // default 1M
-  const [chartLoading, setChartLoading] = useState(false)
-  const [loading, setLoading]         = useState(true)
-  const [showForm, setShowForm]       = useState(false)
-  const [editingSymbol, setEditingSymbol] = useState(null)
-  const [form, setForm]               = useState(EMPTY_FORM)
-  const [submitting, setSubmitting]   = useState(false)
-  const [formError, setFormError]     = useState(null)
-  const [deleting, setDeleting]       = useState(null)
+  const [transactions, setTransactions]     = useState([])
+  const [prices, setPrices]                 = useState({})
+  const [pricesAsOf, setPricesAsOf]         = useState(null)
+  const [chartData, setChartData]           = useState([])
+  const [chartRange, setChartRange]         = useState(RANGES[2])
+  const [chartLoading, setChartLoading]     = useState(false)
+  const [loading, setLoading]               = useState(true)
+  const [selectedSymbol, setSelectedSymbol] = useState(null)
+  const [showForm, setShowForm]             = useState(false)
+  const [editingId, setEditingId]           = useState(null)
+  const [form, setForm]                     = useState(EMPTY_FORM)
+  const [submitting, setSubmitting]         = useState(false)
+  const [formError, setFormError]           = useState(null)
+  const [deleting, setDeleting]             = useState(null)
   const tickColor = dark ? '#4b5563' : '#9ca3af'
 
-  // Load from DB
+  // Load all transactions from DB
   useEffect(() => {
     if (!userId) return
     supabase
       .from('real_holdings')
       .select('*')
       .eq('user_id', userId)
+      .order('activity_date', { ascending: false })
       .then(({ data }) => {
-        setHoldings((data ?? []).map((r) => ({
+        setTransactions((data ?? []).map((r) => ({
+          id: r.id,
           symbol: r.symbol,
           name: r.name ?? null,
           shares: parseFloat(r.shares),
           cashInvested: parseFloat(r.cash_invested),
+          date: r.activity_date,
+          type: r.activity_type ?? 'buy',
         })))
         setLoading(false)
       })
   }, [userId])
 
-  // Refresh prices every 30s
-  const symbolsKey = holdings.map((h) => h.symbol).join(',')
+  // Aggregate net positions per symbol (buys - sells)
+  const positionMap = {}
+  for (const t of transactions) {
+    if (!positionMap[t.symbol]) positionMap[t.symbol] = { shares: 0, name: t.name }
+    if (t.type === 'buy') positionMap[t.symbol].shares += t.shares
+    else positionMap[t.symbol].shares -= t.shares
+  }
+  const activePositions = Object.entries(positionMap)
+    .filter(([, p]) => p.shares > 0.000001)
+    .map(([symbol, p]) => ({ symbol, shares: p.shares, name: p.name }))
+
+  // Refresh prices every 30s using net positions
+  const symbolsKey = activePositions.map((p) => p.symbol).sort().join(',')
   useEffect(() => {
-    const symbols = holdings.map((h) => h.symbol)
-    if (!symbols.length) return
+    const symbols = activePositions.map((p) => p.symbol)
+    if (!symbols.length) { setPrices({}); setPricesAsOf(null); return }
     const load = () => refreshPrices(symbols).then(({ prices, asOf }) => {
       setPrices(prices)
       setPricesAsOf(asOf)
@@ -135,13 +152,13 @@ export default function RealHoldings({ onSummaryChange }) {
     return () => clearInterval(t)
   }, [symbolsKey])
 
-  // Fetch chart whenever holdings or range changes
-  const holdingsKey = holdings.map((h) => `${h.symbol}:${h.shares}`).join(',')
+  // Fetch chart whenever net positions or range changes
+  const holdingsKey = activePositions.map((p) => `${p.symbol}:${p.shares.toFixed(6)}`).join(',')
   useEffect(() => {
-    if (!holdings.length) { setChartData([]); return }
+    if (!activePositions.length) { setChartData([]); return }
     let cancelled = false
     setChartLoading(true)
-    fetchChartHistory(holdings, chartRange)
+    fetchChartHistory(activePositions, chartRange)
       .then((d) => { if (!cancelled) setChartData(d) })
       .catch(() => {})
       .finally(() => { if (!cancelled) setChartLoading(false) })
@@ -149,22 +166,22 @@ export default function RealHoldings({ onSummaryChange }) {
   }, [holdingsKey, chartRange])
 
   const openAdd = () => {
-    setEditingSymbol(null)
-    setForm(EMPTY_FORM)
+    setEditingId(null)
+    setForm({ ...EMPTY_FORM, date: today() })
     setFormError(null)
     setShowForm(true)
   }
 
-  const openEdit = (h) => {
-    setEditingSymbol(h.symbol)
-    setForm({ symbol: h.symbol, shares: String(h.shares), cash: String(h.cashInvested) })
+  const openEdit = (tx) => {
+    setEditingId(tx.id)
+    setForm({ symbol: tx.symbol, shares: String(tx.shares), cash: String(tx.cashInvested), date: tx.date, type: tx.type })
     setFormError(null)
     setShowForm(true)
   }
 
   const closeForm = () => {
     setShowForm(false)
-    setEditingSymbol(null)
+    setEditingId(null)
     setForm(EMPTY_FORM)
     setFormError(null)
   }
@@ -174,23 +191,37 @@ export default function RealHoldings({ onSummaryChange }) {
     const symbol = form.symbol.trim().toUpperCase()
     const shares = parseFloat(form.shares)
     const cash   = parseFloat(form.cash)
-    if (!symbol || !(shares > 0) || !(cash > 0)) {
+    if (!symbol || !(shares > 0) || !(cash > 0) || !form.date) {
       setFormError('Fill in all fields with valid positive values.')
       return
     }
     setSubmitting(true)
     setFormError(null)
     try {
-      const quote = await fetchQuote(symbol)
-      const name  = quote.shortName ?? symbol
-      await supabase.from('real_holdings').upsert(
-        { user_id: userId, symbol, name, shares, cash_invested: cash },
-        { onConflict: 'user_id,symbol' }
-      )
-      setHoldings((prev) => {
-        const rest = prev.filter((h) => h.symbol !== symbol)
-        return [...rest, { symbol, name, shares, cashInvested: cash }]
-      })
+      if (editingId) {
+        const name = transactions.find((t) => t.id === editingId)?.name ?? symbol
+        await supabase.from('real_holdings').update({
+          symbol, name, shares, cash_invested: cash,
+          activity_date: form.date, activity_type: form.type,
+        }).eq('id', editingId)
+        setTransactions((prev) => prev.map((t) =>
+          t.id === editingId
+            ? { ...t, symbol, name, shares, cashInvested: cash, date: form.date, type: form.type }
+            : t
+        ))
+      } else {
+        const quote = await fetchQuote(symbol)
+        const name  = quote.shortName ?? symbol
+        const { data, error } = await supabase.from('real_holdings').insert({
+          user_id: userId, symbol, name, shares, cash_invested: cash,
+          activity_date: form.date, activity_type: form.type,
+        }).select().single()
+        if (error) throw error
+        setTransactions((prev) => [
+          { id: data.id, symbol, name, shares, cashInvested: cash, date: form.date, type: form.type },
+          ...prev,
+        ])
+      }
       closeForm()
     } catch {
       setFormError('Invalid symbol or could not save. Please try again.')
@@ -199,41 +230,37 @@ export default function RealHoldings({ onSummaryChange }) {
     }
   }
 
-  const handleDelete = async (symbol) => {
-    setDeleting(symbol)
-    await supabase.from('real_holdings').delete().match({ user_id: userId, symbol })
-    setHoldings((prev) => prev.filter((h) => h.symbol !== symbol))
+  const handleDelete = async (id) => {
+    setDeleting(id)
+    await supabase.from('real_holdings').delete().eq('id', id)
+    setTransactions((prev) => prev.filter((t) => t.id !== id))
     setDeleting(null)
   }
 
-  // Derived values
-  const rows = holdings.map((h) => {
-    const price = prices[h.symbol] ?? null
-    const value = price != null ? price * h.shares : null
-    const gain  = value != null ? value - h.cashInvested : null
-    const gainPct = gain != null && h.cashInvested > 0 ? (gain / h.cashInvested) * 100 : null
-    return { ...h, price, value, gain, gainPct }
-  })
+  // Totals: buys add, sells subtract
+  const totalInvested = transactions.reduce((s, t) =>
+    t.type === 'buy' ? s + t.cashInvested : s - t.cashInvested, 0)
+  const totalValue = activePositions.reduce((s, p) =>
+    s + (prices[p.symbol] != null ? prices[p.symbol] * p.shares : 0), 0)
+  const totalGain    = totalValue - totalInvested
+  const totalGainPct = totalInvested > 0 ? (totalGain / totalInvested) * 100 : 0
+  const totalIsUp    = totalGain >= 0
 
-  const totalInvested  = rows.reduce((s, r) => s + r.cashInvested, 0)
-  const totalValue     = rows.reduce((s, r) => s + (r.value ?? r.cashInvested), 0)
-  const totalGain      = totalValue - totalInvested
-  const totalGainPct   = totalInvested > 0 ? (totalGain / totalInvested) * 100 : 0
-  const totalIsUp      = totalGain >= 0
+  const first       = chartData[0]?.value ?? 0
+  const last        = chartData[chartData.length - 1]?.value ?? 0
+  const chartPnl    = last - first
+  const chartPnlPct = first > 0 ? (chartPnl / first) * 100 : 0
+  const chartIsUp   = chartPnl >= 0
+  const stroke      = totalIsUp ? '#34d399' : '#f87171'
+  const gradId      = `rh-${totalIsUp ? 'up' : 'dn'}`
 
   useEffect(() => {
     onSummaryChange?.({ totalValue, totalGain, totalGainPct, totalInvested })
   }, [totalValue, totalGain, totalGainPct, totalInvested])
 
-  const first      = chartData[0]?.value ?? 0
-  const last       = chartData[chartData.length - 1]?.value ?? 0
-  const chartPnl   = last - first
-  const chartPnlPct = first > 0 ? (chartPnl / first) * 100 : 0
-  const chartIsUp  = chartPnl >= 0
-  const stroke     = totalIsUp ? '#34d399' : '#f87171'
-  const gradId     = `rh-${totalIsUp ? 'up' : 'dn'}`
-
   if (loading) return null
+
+  const sortedTx = [...transactions].sort((a, b) => b.date.localeCompare(a.date))
 
   return (
     <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
@@ -242,7 +269,7 @@ export default function RealHoldings({ onSummaryChange }) {
       <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Real Holdings</h2>
-          {holdings.length > 0 && (
+          {transactions.length > 0 && (
             <span className={`text-xs font-bold ${totalIsUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
               {totalIsUp ? '+' : ''}{usd(totalGain)} ({totalIsUp ? '+' : ''}{totalGainPct.toFixed(2)}%)
             </span>
@@ -257,20 +284,45 @@ export default function RealHoldings({ onSummaryChange }) {
           onClick={showForm ? closeForm : openAdd}
           className="text-xs px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-white rounded-lg font-medium transition-colors"
         >
-          {showForm ? 'Cancel' : '+ Add Holding'}
+          {showForm ? 'Cancel' : '+ Add Entry'}
         </button>
       </div>
 
       {/* Form */}
       {showForm && (
         <form onSubmit={handleSubmit} className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/30">
+          <div className="flex gap-1.5 mb-3">
+            {['buy', 'sell'].map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, type: t }))}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wide transition-colors ${
+                  form.type === t
+                    ? t === 'buy' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
           <div className="flex gap-2 flex-wrap items-end">
+            <div className="flex-1 min-w-[120px]">
+              <label className="block text-xs text-gray-500 mb-1">Date</label>
+              <input
+                type="date"
+                value={form.date}
+                onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+                className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 transition-colors"
+              />
+            </div>
             <div className="flex-1 min-w-[90px]">
               <label className="block text-xs text-gray-500 mb-1">Symbol</label>
               <input
                 value={form.symbol}
                 onChange={(e) => setForm((f) => ({ ...f, symbol: e.target.value.toUpperCase() }))}
-                disabled={!!editingSymbol}
+                disabled={!!editingId}
                 placeholder="AAPL"
                 className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 transition-colors placeholder-gray-400 disabled:opacity-50"
               />
@@ -285,8 +337,10 @@ export default function RealHoldings({ onSummaryChange }) {
                 className="w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:border-emerald-500 transition-colors placeholder-gray-400"
               />
             </div>
-            <div className="flex-1 min-w-[120px]">
-              <label className="block text-xs text-gray-500 mb-1">Cash Invested ($)</label>
+            <div className="flex-1 min-w-[130px]">
+              <label className="block text-xs text-gray-500 mb-1">
+                {form.type === 'buy' ? 'Cash Invested ($)' : 'Cash Received ($)'}
+              </label>
               <input
                 type="number" min="0" step="any"
                 value={form.cash}
@@ -299,7 +353,7 @@ export default function RealHoldings({ onSummaryChange }) {
               type="submit" disabled={submitting}
               className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors whitespace-nowrap"
             >
-              {submitting ? 'Saving…' : editingSymbol ? 'Update' : 'Add'}
+              {submitting ? 'Saving…' : editingId ? 'Update' : 'Add'}
             </button>
           </div>
           {formError && <p className="text-xs text-red-500 mt-2">{formError}</p>}
@@ -307,15 +361,15 @@ export default function RealHoldings({ onSummaryChange }) {
       )}
 
       {/* Empty state */}
-      {!holdings.length && (
+      {!transactions.length && (
         <div className="py-10 text-center">
-          <p className="text-gray-400 dark:text-gray-600 text-sm">No real holdings yet</p>
-          <p className="text-gray-300 dark:text-gray-700 text-xs mt-1">Add a holding to start tracking your real portfolio</p>
+          <p className="text-gray-400 dark:text-gray-600 text-sm">No entries yet</p>
+          <p className="text-gray-300 dark:text-gray-700 text-xs mt-1">Add a buy or sell entry to start tracking</p>
         </div>
       )}
 
-      {/* Performance chart — shown above table */}
-      {holdings.length > 0 && (chartLoading || chartData.length > 1) && (
+      {/* Performance chart */}
+      {activePositions.length > 0 && (chartLoading || chartData.length > 1) && (
         <div className="border-b border-gray-100 dark:border-gray-800 p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -383,99 +437,205 @@ export default function RealHoldings({ onSummaryChange }) {
         </div>
       )}
 
-      {/* Table */}
-      {holdings.length > 0 && (
-        <>
-          <div className="overflow-x-auto scrollbar-hide">
-            <table className="w-full text-sm min-w-[580px]">
-              <thead>
-                <tr className="text-xs text-gray-400 dark:text-gray-600 uppercase tracking-wide border-b border-gray-100 dark:border-gray-800/50">
-                  <th className="text-left px-4 py-2.5 font-medium">Symbol</th>
-                  <th className="text-right px-4 py-2.5 font-medium">Shares</th>
-                  <th className="text-right px-4 py-2.5 font-medium">Avg Cost</th>
-                  <th className="text-right px-4 py-2.5 font-medium">Price</th>
-                  <th className="text-right px-4 py-2.5 font-medium">Value</th>
-                  <th className="text-right px-4 py-2.5 font-medium">Gain / Loss</th>
-                  <th className="px-4 py-2.5" />
+      {/* Transaction table */}
+      {transactions.length > 0 && (
+        <div className="overflow-x-auto scrollbar-hide">
+          <table className="w-full text-sm min-w-[500px]">
+            <thead>
+              <tr className="text-xs text-gray-400 dark:text-gray-600 uppercase tracking-wide border-b border-gray-100 dark:border-gray-800/50">
+                <th className="text-left px-4 py-2.5 font-medium">Date</th>
+                <th className="text-left px-4 py-2.5 font-medium">Type</th>
+                <th className="text-left px-4 py-2.5 font-medium">Symbol</th>
+                <th className="text-right px-4 py-2.5 font-medium">Shares</th>
+                <th className="text-right px-4 py-2.5 font-medium">Cash</th>
+                <th className="px-4 py-2.5" />
+              </tr>
+            </thead>
+            <tbody>
+              {sortedTx.map((tx) => (
+                <tr key={tx.id} className="border-t border-gray-100 dark:border-gray-800/40 hover:bg-gray-50 dark:hover:bg-gray-800/20 transition-colors">
+                  <td className="px-4 py-3 text-xs text-gray-400 dark:text-gray-500 tabular-nums whitespace-nowrap">
+                    {new Date(tx.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold uppercase ${
+                      tx.type === 'buy'
+                        ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                        : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                    }`}>
+                      {tx.type}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <button onClick={() => setSelectedSymbol(tx.symbol)} className="text-left group">
+                      <div className="font-mono font-bold text-gray-900 dark:text-white text-sm group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{tx.symbol}</div>
+                      {tx.name && <div className="text-xs text-gray-400 dark:text-gray-600 truncate max-w-[130px]">{tx.name}</div>}
+                    </button>
+                  </td>
+                  <td className="text-right px-4 py-3 text-gray-600 dark:text-gray-300 tabular-nums">
+                    {tx.shares < 1 ? tx.shares.toFixed(6) : tx.shares.toFixed(4)}
+                  </td>
+                  <td className={`text-right px-4 py-3 tabular-nums font-medium ${
+                    tx.type === 'sell' ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'
+                  }`}>
+                    {tx.type === 'sell' ? '-' : ''}{usd(tx.cashInvested)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => openEdit(tx)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" title="Edit">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleDelete(tx.id)}
+                        disabled={deleting === tx.id}
+                        className="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
+                        title="Remove"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => {
-                  const up  = (r.gain ?? 0) >= 0
-                  const clr = up ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
-                  return (
-                    <tr key={r.symbol} className="border-t border-gray-100 dark:border-gray-800/40 hover:bg-gray-50 dark:hover:bg-gray-800/20 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="font-mono font-bold text-gray-900 dark:text-white text-sm">{r.symbol}</div>
-                        {r.name && <div className="text-xs text-gray-400 dark:text-gray-600 truncate max-w-[130px]">{r.name}</div>}
-                      </td>
-                      <td className="text-right px-4 py-3 text-gray-600 dark:text-gray-300 tabular-nums">
-                        {r.shares < 1 ? r.shares.toFixed(6) : r.shares.toFixed(4)}
-                      </td>
-                      <td className="text-right px-4 py-3 text-gray-400 dark:text-gray-500 tabular-nums text-xs">
-                        {usd(r.cashInvested / r.shares)}
-                      </td>
-                      <td className="text-right px-4 py-3 text-gray-700 dark:text-gray-200 tabular-nums font-medium">
-                        {r.price != null ? usd(r.price) : '—'}
-                      </td>
-                      <td className="text-right px-4 py-3 text-gray-900 dark:text-white tabular-nums font-semibold">
-                        {r.value != null ? usd(r.value) : '—'}
-                      </td>
-                      <td className="text-right px-4 py-3">
-                        {r.gain != null ? (
-                          <>
-                            <div className={`font-semibold tabular-nums ${clr}`}>
-                              {r.gain >= 0 ? '+' : ''}{usd(r.gain)}
-                            </div>
-                            <div className={`text-xs ${clr}`}>
-                              {r.gainPct >= 0 ? '+' : ''}{r.gainPct.toFixed(2)}%
-                            </div>
-                          </>
-                        ) : '—'}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => openEdit(r)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" title="Edit">
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => handleDelete(r.symbol)}
-                            disabled={deleting === r.symbol}
-                            className="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
-                            title="Remove"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/30">
-                  <td colSpan={4} className="px-4 py-2.5 text-xs text-gray-500 font-semibold uppercase tracking-wide">
-                    Total · {usd(totalInvested)} invested
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/30">
+                <td colSpan={4} className="px-4 py-2.5 text-xs text-gray-500 font-semibold uppercase tracking-wide">
+                  Net invested · {usd(totalInvested)}
+                </td>
+                <td className="text-right px-4 py-2.5 text-gray-900 dark:text-white font-bold tabular-nums">
+                  {usd(totalValue)}
+                </td>
+                <td />
+              </tr>
+              {activePositions.length > 0 && (
+                <tr className="bg-gray-50 dark:bg-gray-800/30">
+                  <td colSpan={4} className="px-4 pb-3 text-xs text-gray-400">
+                    Current value · {activePositions.length} position{activePositions.length !== 1 ? 's' : ''}
                   </td>
-                  <td className="text-right px-4 py-2.5 text-gray-900 dark:text-white font-bold tabular-nums">
-                    {usd(totalValue)}
-                  </td>
-                  <td className={`text-right px-4 py-2.5 font-bold tabular-nums ${totalIsUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                    <div>{totalIsUp ? '+' : ''}{usd(totalGain)}</div>
-                    <div className="text-xs">{totalGainPct >= 0 ? '+' : ''}{totalGainPct.toFixed(2)}%</div>
+                  <td className={`text-right px-4 pb-3 font-bold tabular-nums text-sm ${totalIsUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                    {totalIsUp ? '+' : ''}{usd(totalGain)} ({totalGainPct >= 0 ? '+' : ''}{totalGainPct.toFixed(2)}%)
                   </td>
                   <td />
                 </tr>
-              </tfoot>
-            </table>
-          </div>
-
-        </>
+              )}
+            </tfoot>
+          </table>
+        </div>
       )}
+
+      {/* Symbol detail modal */}
+      {selectedSymbol && (() => {
+        const symTx = [...transactions]
+          .filter((t) => t.symbol === selectedSymbol)
+          .sort((a, b) => b.date.localeCompare(a.date))
+        const symName = symTx[0]?.name ?? selectedSymbol
+        const netShares = symTx.reduce((s, t) => t.type === 'buy' ? s + t.shares : s - t.shares, 0)
+        const netInvested = symTx.reduce((s, t) => t.type === 'buy' ? s + t.cashInvested : s - t.cashInvested, 0)
+        const currentPrice = prices[selectedSymbol] ?? null
+        const currentValue = currentPrice != null ? currentPrice * Math.max(netShares, 0) : null
+        const pnl = currentValue != null ? currentValue - netInvested : null
+        const pnlPct = pnl != null && netInvested > 0 ? (pnl / netInvested) * 100 : null
+        const isUp = (pnl ?? 0) >= 0
+
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+            onMouseDown={(e) => { if (e.target === e.currentTarget) setSelectedSymbol(null) }}
+          >
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg border border-gray-200 dark:border-gray-700 max-h-[85vh] flex flex-col">
+              {/* Modal header */}
+              <div className="flex items-start justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-800">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-white font-mono">{selectedSymbol}</h2>
+                    {pnl != null && (
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded ${isUp ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'}`}>
+                        {isUp ? '+' : ''}{usd(pnl)}
+                      </span>
+                    )}
+                  </div>
+                  {symName !== selectedSymbol && <p className="text-xs text-gray-400 mt-0.5">{symName}</p>}
+                </div>
+                <button onClick={() => setSelectedSymbol(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-1">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Summary stats */}
+              <div className="grid grid-cols-3 gap-px bg-gray-100 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-800">
+                {[
+                  { label: 'Net Shares', value: netShares > 0.000001 ? (netShares < 1 ? netShares.toFixed(6) : netShares.toFixed(4)) : '0' },
+                  { label: 'Net Invested', value: usd(netInvested) },
+                  { label: 'Current Value', value: currentValue != null ? usd(currentValue) : '—' },
+                ].map(({ label, value }) => (
+                  <div key={label} className="bg-white dark:bg-gray-900 px-4 py-3">
+                    <p className="text-xs text-gray-400 dark:text-gray-600 uppercase tracking-wide mb-0.5">{label}</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white tabular-nums">{value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* P&L bar */}
+              {pnl != null && (
+                <div className={`px-5 py-2.5 text-sm font-semibold flex items-center justify-between ${isUp ? 'bg-emerald-50 dark:bg-emerald-900/10 text-emerald-700 dark:text-emerald-400' : 'bg-red-50 dark:bg-red-900/10 text-red-700 dark:text-red-400'}`}>
+                  <span>Total P&amp;L</span>
+                  <span className="tabular-nums">
+                    {isUp ? '+' : ''}{usd(pnl)}
+                    {pnlPct != null && <span className="ml-2 text-xs opacity-75">({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%)</span>}
+                  </span>
+                </div>
+              )}
+
+              {/* Transaction list */}
+              <div className="overflow-y-auto scrollbar-hide flex-1">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-white dark:bg-gray-900">
+                    <tr className="text-xs text-gray-400 dark:text-gray-600 uppercase tracking-wide border-b border-gray-100 dark:border-gray-800">
+                      <th className="text-left px-5 py-2.5 font-medium">Date</th>
+                      <th className="text-left px-4 py-2.5 font-medium">Type</th>
+                      <th className="text-right px-4 py-2.5 font-medium">Shares</th>
+                      <th className="text-right px-5 py-2.5 font-medium">Cash</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {symTx.map((tx) => (
+                      <tr key={tx.id} className="border-t border-gray-100 dark:border-gray-800/40 hover:bg-gray-50 dark:hover:bg-gray-800/20 transition-colors">
+                        <td className="px-5 py-3 text-xs text-gray-400 dark:text-gray-500 tabular-nums whitespace-nowrap">
+                          {new Date(tx.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold uppercase ${
+                            tx.type === 'buy'
+                              ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                              : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                          }`}>
+                            {tx.type}
+                          </span>
+                        </td>
+                        <td className="text-right px-4 py-3 text-gray-600 dark:text-gray-300 tabular-nums">
+                          {tx.shares < 1 ? tx.shares.toFixed(6) : tx.shares.toFixed(4)}
+                        </td>
+                        <td className={`text-right px-5 py-3 tabular-nums font-medium ${
+                          tx.type === 'sell' ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'
+                        }`}>
+                          {tx.type === 'sell' ? '-' : ''}{usd(tx.cashInvested)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
