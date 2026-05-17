@@ -564,14 +564,19 @@ export default function RealHoldings({ onSummaryChange }) {
       {/* Transaction table */}
       {transactions.length > 0 && (
         <div className="overflow-x-auto scrollbar-hide">
-          <table className="w-full text-sm min-w-[500px]">
+          <table className="w-full text-sm min-w-[1020px]">
             <thead>
               <tr className="text-xs text-gray-400 dark:text-gray-600 uppercase tracking-wide border-b border-gray-100 dark:border-gray-800/50">
                 <th className="text-left px-4 py-2.5 font-medium">Date</th>
                 <th className="text-left px-4 py-2.5 font-medium">Type</th>
                 <th className="text-left px-4 py-2.5 font-medium">Symbol</th>
                 <th className="text-right px-4 py-2.5 font-medium">Shares</th>
-                <th className="text-right px-4 py-2.5 font-medium">Cash</th>
+                <th className="text-right px-4 py-2.5 font-medium">Price Paid</th>
+                <th className="text-right px-4 py-2.5 font-medium">Live Price</th>
+                <th className="text-right px-4 py-2.5 font-medium">Δ Price</th>
+                <th className="text-right px-4 py-2.5 font-medium">Cash Paid</th>
+                <th className="text-right px-4 py-2.5 font-medium">Live Value</th>
+                <th className="text-right px-4 py-2.5 font-medium">P&amp;L</th>
                 <th className="px-4 py-2.5" />
               </tr>
             </thead>
@@ -609,11 +614,52 @@ export default function RealHoldings({ onSummaryChange }) {
                   <td className="text-right px-4 py-3 text-gray-600 dark:text-gray-300 tabular-nums">
                     {tx.shares < 1 ? tx.shares.toFixed(6) : tx.shares.toFixed(4)}
                   </td>
+                  <td className="text-right px-4 py-3 tabular-nums text-sm text-gray-500 dark:text-gray-400">
+                    {usd(tx.cashInvested / tx.shares)}
+                  </td>
+                  <td className="text-right px-4 py-3 tabular-nums text-sm text-gray-700 dark:text-gray-200">
+                    {prices[tx.symbol] != null
+                      ? usd(prices[tx.symbol])
+                      : <span className="text-gray-300 dark:text-gray-700">—</span>}
+                  </td>
+                  {(() => {
+                    const pricePaid = tx.cashInvested / tx.shares
+                    const livePrice = prices[tx.symbol]
+                    if (livePrice == null) {
+                      return <td className="text-right px-4 py-3 text-gray-300 dark:text-gray-700 tabular-nums text-sm">—</td>
+                    }
+                    const delta = livePrice - pricePaid
+                    const deltaPct = (delta / pricePaid) * 100
+                    return (
+                      <td className={`text-right px-4 py-3 tabular-nums text-sm font-medium ${delta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                        <div>{delta >= 0 ? '+' : ''}{usd(delta)}</div>
+                        <div className="text-xs opacity-70">{deltaPct >= 0 ? '+' : ''}{deltaPct.toFixed(2)}%</div>
+                      </td>
+                    )
+                  })()}
                   <td className={`text-right px-4 py-3 tabular-nums font-medium ${
                     tx.type === 'sell' ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'
                   }`}>
                     {tx.type === 'sell' ? '-' : ''}{usd(tx.cashInvested)}
                   </td>
+                  <td className="text-right px-4 py-3 tabular-nums text-sm text-gray-700 dark:text-gray-200 font-medium">
+                    {tx.type === 'buy' && prices[tx.symbol] != null
+                      ? usd(tx.shares * prices[tx.symbol])
+                      : <span className="text-gray-300 dark:text-gray-700">—</span>}
+                  </td>
+                  {(() => {
+                    if (tx.type !== 'buy' || prices[tx.symbol] == null) {
+                      return <td className="text-right px-4 py-3 text-gray-300 dark:text-gray-700 tabular-nums text-sm">—</td>
+                    }
+                    const txPnl = tx.shares * prices[tx.symbol] - tx.cashInvested
+                    const txPnlPct = tx.cashInvested > 0 ? (txPnl / tx.cashInvested) * 100 : 0
+                    return (
+                      <td className={`text-right px-4 py-3 tabular-nums text-sm font-medium ${txPnl >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                        <div>{txPnl >= 0 ? '+' : ''}{usd(txPnl)}</div>
+                        <div className="text-xs opacity-70">{txPnlPct >= 0 ? '+' : ''}{txPnlPct.toFixed(2)}%</div>
+                      </td>
+                    )
+                  })()}
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <button onClick={() => openEdit(tx)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" title="Edit">
@@ -638,25 +684,25 @@ export default function RealHoldings({ onSummaryChange }) {
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/30">
-                <td colSpan={4} className="px-4 py-2.5 text-xs text-gray-500 font-semibold uppercase tracking-wide">
-                  Net invested · {usd(totalInvested)}
+                <td colSpan={7} className="px-4 py-2.5 text-xs text-gray-500 font-semibold uppercase tracking-wide">
+                  Total · {activePositions.length} position{activePositions.length !== 1 ? 's' : ''}
                 </td>
-                <td className="text-right px-4 py-2.5 text-gray-900 dark:text-white font-bold tabular-nums">
-                  {usd(totalValue)}
+                <td className="text-right px-4 py-2.5 text-gray-700 dark:text-gray-300 font-bold tabular-nums text-sm">
+                  {usd(totalInvested)}
+                </td>
+                <td className="text-right px-4 py-2.5 text-gray-900 dark:text-white font-bold tabular-nums text-sm">
+                  {totalValue > 0 ? usd(totalValue) : '—'}
+                </td>
+                <td className={`text-right px-4 py-2.5 font-bold tabular-nums text-sm ${totalIsUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {totalValue > 0 ? (
+                    <>
+                      <div>{totalIsUp ? '+' : ''}{usd(totalGain)}</div>
+                      <div className="text-xs font-medium opacity-70">{totalGainPct >= 0 ? '+' : ''}{totalGainPct.toFixed(2)}%</div>
+                    </>
+                  ) : '—'}
                 </td>
                 <td />
               </tr>
-              {activePositions.length > 0 && (
-                <tr className="bg-gray-50 dark:bg-gray-800/30">
-                  <td colSpan={4} className="px-4 pb-3 text-xs text-gray-400">
-                    Current value · {activePositions.length} position{activePositions.length !== 1 ? 's' : ''}
-                  </td>
-                  <td className={`text-right px-4 pb-3 font-bold tabular-nums text-sm ${totalIsUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                    {totalIsUp ? '+' : ''}{usd(totalGain)} ({totalGainPct >= 0 ? '+' : ''}{totalGainPct.toFixed(2)}%)
-                  </td>
-                  <td />
-                </tr>
-              )}
             </tfoot>
           </table>
         </div>
@@ -760,7 +806,7 @@ export default function RealHoldings({ onSummaryChange }) {
                       <th className="text-left px-5 py-2.5 font-medium">Date</th>
                       <th className="text-left px-4 py-2.5 font-medium">Type</th>
                       <th className="text-right px-4 py-2.5 font-medium">Shares</th>
-                      <th className="text-right px-5 py-2.5 font-medium">Cash</th>
+                      <th className="text-right px-5 py-2.5 font-medium">Cash Paid</th>
                     </tr>
                   </thead>
                   <tbody>
