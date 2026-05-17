@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../supabase'
 import { useStore } from '../store'
 import { fetchQuote } from '../api'
+import { formatAge, useNow } from '../time'
 
 const QUOTES_URL = `${SUPABASE_URL}/functions/v1/yahoo-quotes`
 const AUTH       = { Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
@@ -46,6 +47,7 @@ const usd = (n) =>
   (n ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
 
 export default function Watchlist({ onSelect }) {
+  useNow()
   const { userId, watchlist: storedWatchlist, setWatchlist } = useStore()
 
   // Bootstrap from persisted store so items survive page reloads without a DB round-trip
@@ -57,6 +59,7 @@ export default function Watchlist({ onSelect }) {
   const [removing, setRemoving]   = useState(null)
   const [selecting, setSelecting] = useState(null)
   const [loading, setLoading]     = useState(!(storedWatchlist?.length))
+  const [enrichedAt, setEnrichedAt] = useState(null)
 
   // Keep store in sync whenever items change
   const setItems = (updaterOrValue) => {
@@ -88,8 +91,9 @@ export default function Watchlist({ onSelect }) {
   useEffect(() => {
     const symbols = items.map((i) => i.symbol)
     if (!symbols.length) { setEnriched({}); return }
-    fetchEnriched(symbols).then(setEnriched)
-    const t = setInterval(() => fetchEnriched(symbols).then(setEnriched), 300_000)
+    const refresh = () => fetchEnriched(symbols).then((d) => { setEnriched(d); setEnrichedAt(new Date()) })
+    refresh()
+    const t = setInterval(refresh, 300_000)
     return () => clearInterval(t)
   }, [symbolsKey])
 
@@ -153,7 +157,10 @@ export default function Watchlist({ onSelect }) {
     <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between gap-3">
-        <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Watchlist</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Watchlist</h2>
+          {enrichedAt && <span className="text-xs text-gray-300 dark:text-gray-700">{formatAge(enrichedAt)}</span>}
+        </div>
         <form onSubmit={handleAdd} className="flex items-center gap-2">
           {addError && <span className="text-xs text-red-500">{addError}</span>}
           <input
@@ -201,7 +208,7 @@ export default function Watchlist({ onSelect }) {
                 const changePct = q?.regularMarketChangePercent ?? null
                 const isUp = (changePct ?? 0) >= 0
                 const marketTime = q?.regularMarketTime
-                  ? new Date(q.regularMarketTime * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+                  ? formatAge(new Date(q.regularMarketTime * 1000))
                   : null
 
                 const busy = selecting === item.symbol

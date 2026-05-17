@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { formatAge, useNow } from '../time'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../supabase'
 import { useStore } from '../store'
@@ -125,9 +126,9 @@ const usd = (n) =>
   (n ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
 
 const tickUsd = (v) => {
-  if (v >= 1e6) return `$${(v / 1e6).toFixed(1)}M`
-  if (v >= 1e3) return `$${(v / 1e3).toFixed(0)}k`
-  return `$${v.toFixed(0)}`
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(2)}M`
+  if (v >= 1e3) return `$${(v / 1e3).toFixed(2)}k`
+  return `$${v.toFixed(2)}`
 }
 
 async function fetchChartHistory(positions, range) {
@@ -188,6 +189,7 @@ const today = () => new Date().toISOString().split('T')[0]
 const EMPTY_FORM = { symbol: '', shares: '', cash: '', date: today(), type: 'buy' }
 
 export default function RealHoldings({ onSummaryChange }) {
+  useNow()
   const { userId } = useStore()
   const { dark } = useTheme()
   const [transactions, setTransactions]     = useState([])
@@ -398,7 +400,7 @@ export default function RealHoldings({ onSummaryChange }) {
           )}
           {pricesAsOf && (
             <span className="text-xs text-gray-300 dark:text-gray-700">
-              as of {pricesAsOf.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+              {formatAge(pricesAsOf)}
             </span>
           )}
         </div>
@@ -543,7 +545,7 @@ export default function RealHoldings({ onSummaryChange }) {
                     tickFormatter={tickUsd}
                     tick={{ fill: tickColor, fontSize: 10 }}
                     axisLine={false} tickLine={false}
-                    width={48} domain={['auto', 'auto']}
+                    width={60} domain={['auto', 'auto']} tickCount={8}
                   />
                   <Tooltip content={<ChartTooltip range={chartRange} />} />
                   <Area

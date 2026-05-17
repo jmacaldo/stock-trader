@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, Fragment } from 'react'
 import { useStore } from '../store'
 import { refreshPrices } from '../prices'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../supabase'
+import { formatAge, useNow } from '../time'
 
 const QUOTES_URL = `${SUPABASE_URL}/functions/v1/yahoo-quotes`
 const AUTH = { Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
@@ -59,6 +60,7 @@ const SIGNAL_STYLES = {
 }
 
 export default function Portfolio({ onValueChange }) {
+  useNow()
   const { portfolio, sellStock } = useStore()
   const [prices, setPrices]         = useState({})
   const [loading, setLoading]       = useState(false)
@@ -165,7 +167,7 @@ export default function Portfolio({ onValueChange }) {
           {loading && <span className="text-xs text-gray-400 dark:text-gray-600">Updating...</span>}
           {lastUpdated && !loading && (
             <span className="text-xs text-gray-300 dark:text-gray-700">
-              as of {lastUpdated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+              {formatAge(lastUpdated)}
             </span>
           )}
         </div>

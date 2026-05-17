@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { fetchQuote } from '../api'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../supabase'
+import { formatAge, useNow } from '../time'
 
 const MOVERS_URL = `${SUPABASE_URL}/functions/v1/yahoo-movers`
 const AUTH = { Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
@@ -120,6 +121,7 @@ const THead = () => (
 )
 
 export default function MarketMovers({ onSelect }) {
+  useNow()
   const [gainers, setGainers] = useState([])
   const [losers, setLosers]   = useState([])
   const [loading, setLoading] = useState(false)
@@ -181,7 +183,7 @@ export default function MarketMovers({ onSelect }) {
           )}
           {updated && !loading && (
             <span className="text-xs text-gray-300 dark:text-gray-700">
-              as of {updated.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+              {formatAge(updated)}
             </span>
           )}
         </div>
