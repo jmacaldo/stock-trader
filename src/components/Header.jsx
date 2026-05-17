@@ -25,7 +25,8 @@ function MoonIcon() {
 }
 
 export default function Header({ portfolioValue, realSummary, view, onViewChange }) {
-  const { startingBalance } = useStore()
+  const { startingBalance, wallet, portfolio } = useStore()
+  const invested = Object.values(portfolio ?? {}).reduce((sum, p) => sum + p.shares * p.avgCost, 0)
   const { dark, toggle } = useTheme()
   const [userEmail, setUserEmail] = useState(null)
 
@@ -63,6 +64,14 @@ export default function Header({ portfolioValue, realSummary, view, onViewChange
             value={hasData ? `${isUp ? '+' : ''}${usd(pnl)} (${isUp ? '+' : ''}${pnlPct.toFixed(2)}%)` : '—'}
             color={isUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}
           />
+          {isPaper && (
+            <>
+              <div className="w-px h-8 bg-gray-200 dark:bg-gray-800" />
+              <Stat label="Wallet" value={usd(wallet ?? 0)} color="text-emerald-600 dark:text-emerald-400" />
+              <div className="w-px h-8 bg-gray-200 dark:bg-gray-800" />
+              <Stat label="Invested" value={usd(invested)} />
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5 border border-gray-200 dark:border-gray-700">

@@ -91,27 +91,35 @@ export default function App() {
           )}
 
           <main className="max-w-7xl mx-auto p-4 lg:p-6">
+            {/* Real tab wrapper — always mounted so Watchlist state survives tab switches */}
             <div className={`space-y-5${view !== 'holdings' ? ' hidden' : ''}`}>
-              <Suspense fallback={null}>
-                <RealHoldings onSummaryChange={setRealSummary} />
-              </Suspense>
+              {/* RealHoldings conditionally rendered — has Recharts charts that error at 0 dimensions */}
+              {view === 'holdings' && (
+                <Suspense fallback={null}>
+                  <RealHoldings onSummaryChange={setRealSummary} />
+                </Suspense>
+              )}
+              {/* Watchlist always mounted — no charts, state must survive tab switches */}
               <Suspense fallback={null}>
                 <Watchlist onSelect={(quote) => openModal(quote)} />
               </Suspense>
             </div>
-            <div className={`space-y-5${view === 'holdings' ? ' hidden' : ''}`}>
-              <Suspense fallback={null}>
-                <SearchWidget />
-              </Suspense>
-              <Suspense fallback={null}>
-                <PortfolioChart />
-              </Suspense>
-              <Portfolio onValueChange={setPortfolioValue} />
-              <History />
-              <Suspense fallback={null}>
-                <MarketMovers onSelect={(quote) => openModal(quote)} />
-              </Suspense>
-            </div>
+            {/* Paper tab — only mounted when active so Recharts can measure its container */}
+            {view !== 'holdings' && (
+              <div className="space-y-5">
+                <Suspense fallback={null}>
+                  <SearchWidget />
+                </Suspense>
+                <Suspense fallback={null}>
+                  <PortfolioChart />
+                </Suspense>
+                <Portfolio onValueChange={setPortfolioValue} />
+                <History />
+                <Suspense fallback={null}>
+                  <MarketMovers onSelect={(quote) => openModal(quote)} />
+                </Suspense>
+              </div>
+            )}
           </main>
         </div>
       )}

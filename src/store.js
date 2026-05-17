@@ -14,6 +14,7 @@ export const useStore = create(
       portfolio: {},
       trades: [],
       watchlist: [],
+      wallet: 0,
 
       setUserId: (id) => set({ userId: id }),
       setWatchlist: (items) => set({ watchlist: items }),
@@ -103,13 +104,14 @@ export const useStore = create(
         }
 
         const newBalance = parseFloat((balance + proceeds).toFixed(2))
+        const newWallet  = parseFloat(((get().wallet ?? 0) + proceeds).toFixed(2))
         const trade = {
           id: `${Date.now()}-${Math.random()}`,
           symbol, name: holding.name, type: 'SELL', shares, price, total: proceeds,
           timestamp: new Date().toISOString(),
         }
 
-        set({ balance: newBalance, portfolio: newPortfolio, trades: [trade, ...get().trades] })
+        set({ balance: newBalance, wallet: newWallet, portfolio: newPortfolio, trades: [trade, ...get().trades] })
 
         if (userId) {
           Promise.all([
@@ -124,7 +126,7 @@ export const useStore = create(
       reset: (newStartingBalance) => {
         const { userId, apiKey } = get()
         const amount = newStartingBalance ?? get().startingBalance
-        set({ balance: amount, startingBalance: amount, portfolio: {}, trades: [] })
+        set({ balance: amount, startingBalance: amount, portfolio: {}, trades: [], wallet: 0 })
 
         if (userId) {
           Promise.all([

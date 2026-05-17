@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, Fragment } from 'react'
 import { useStore } from '../store'
 import { refreshPrices } from '../prices'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../supabase'
@@ -59,10 +59,13 @@ const SIGNAL_STYLES = {
 }
 
 export default function Portfolio({ onValueChange }) {
-  const { portfolio } = useStore()
-  const [prices, setPrices] = useState({})
-  const [loading, setLoading] = useState(false)
+  const { portfolio, sellStock } = useStore()
+  const [prices, setPrices]         = useState({})
+  const [loading, setLoading]       = useState(false)
   const [lastUpdated, setLastUpdated] = useState(null)
+  const [selling, setSelling]       = useState(null)
+  const [sellInput, setSellInput]   = useState('')
+  const [sellError, setSellError]   = useState(null)
   const onValueChangeRef = useRef(onValueChange)
   onValueChangeRef.current = onValueChange
 
@@ -103,6 +106,19 @@ export default function Portfolio({ onValueChange }) {
     const interval = setInterval(load, 30000)
     return () => clearInterval(interval)
   }, [symbols.join(',')])
+
+  const openSell = (sym) => { setSelling(sym); setSellInput(''); setSellError(null) }
+  const closeSell = () => { setSelling(null); setSellInput(''); setSellError(null) }
+
+  const handleSell = (sym, current, maxValue) => {
+    const amount = parseFloat(sellInput)
+    if (!amount || amount <= 0)   { setSellError('Enter an amount'); return }
+    if (amount > maxValue + 0.01) { setSellError(`Max is ${usd(maxValue)}`); return }
+    const sharesToSell = Math.min(amount / current, portfolio[sym]?.shares ?? 0)
+    const result = sellStock(sym, sharesToSell, current)
+    if (result?.error) { setSellError(result.error); return }
+    closeSell()
+  }
 
   if (!symbols.length) {
     return (
@@ -166,13 +182,15 @@ export default function Portfolio({ onValueChange }) {
               <th className="text-right px-4 py-2.5 font-medium">Signal</th>
               <th className="text-right px-4 py-2.5 font-medium">Live Value</th>
               <th className="text-right px-4 py-2.5 font-medium">P&L</th>
+              <th className="px-4 py-2.5" />
             </tr>
           </thead>
           <tbody>
             {rows.map(({ sym, shares, avgCost, name, current, value, pnl, pnlPct }) => {
               const sig = computeSignal(enrichedData[sym], { netInvested: shares * avgCost, netShares: shares })
               return (
-                <tr key={sym} className="border-t border-gray-100 dark:border-gray-800/40 hover:bg-gray-50 dark:hover:bg-gray-800/20 transition-colors">
+                <Fragment key={sym}>
+                <tr className="border-t border-gray-100 dark:border-gray-800/40 hover:bg-gray-50 dark:hover:bg-gray-800/20 transition-colors">
                   <td className="px-4 py-3">
                     <div className="font-mono font-bold text-gray-900 dark:text-white text-sm">{sym}</div>
                     <div className="text-xs text-gray-400 dark:text-gray-600 truncate max-w-[130px]">{name}</div>
@@ -203,7 +221,58 @@ export default function Portfolio({ onValueChange }) {
                       {pnl >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
                     </div>
                   </td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      onClick={() => selling === sym ? closeSell() : openSell(sym)}
+                      className={`text-xs px-2.5 py-1 rounded-lg font-medium border transition-colors ${
+                        selling === sym
+                          ? 'bg-gray-100 dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700'
+                          : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/40'
+                      }`}
+                    >
+                      {selling === sym ? 'Cancel' : 'Sell'}
+                    </button>
+                    {selling === sym && (
+                      <div className="mt-2 flex flex-col items-end gap-1.5">
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-gray-400">$</span>
+                          <input
+                            autoFocus
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={sellInput}
+                            onChange={(e) => { setSellInput(e.target.value); setSellError(null) }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') handleSell(sym, current, value); if (e.key === 'Escape') closeSell() }}
+                            placeholder="0.00"
+                            className="w-24 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 text-xs tabular-nums text-gray-900 dark:text-white focus:outline-none focus:border-red-400 transition-colors"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setSellInput(value.toFixed(2))}
+                            className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                          >
+                            Max
+                          </button>
+                          <button
+                            onClick={() => handleSell(sym, current, value)}
+                            className="text-xs px-2.5 py-1 bg-red-500 hover:bg-red-400 text-white rounded-lg font-medium transition-colors"
+                          >
+                            Cash Out
+                          </button>
+                        </div>
+                        {sellError && <span className="text-xs text-red-500 text-right">{sellError}</span>}
+                        {sellInput && !sellError && (
+                          <span className="text-xs text-gray-400 dark:text-gray-600 tabular-nums">
+                            ≈ {((parseFloat(sellInput) || 0) / current).toFixed(4)} sh
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </td>
                 </tr>
+                </Fragment>
               )
             })}
           </tbody>
@@ -215,6 +284,7 @@ export default function Portfolio({ onValueChange }) {
                 <td className={`text-right px-4 py-2.5 font-bold tabular-nums ${totalPnl >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                   {totalPnl >= 0 ? '+' : ''}{usd(totalPnl)}
                 </td>
+                <td className="px-4 py-2.5" />
               </tr>
             </tfoot>
           )}
