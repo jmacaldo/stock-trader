@@ -13,8 +13,10 @@ export const useStore = create(
       startingBalance: DEFAULT_BALANCE,
       portfolio: {},
       trades: [],
+      watchlist: [],
 
       setUserId: (id) => set({ userId: id }),
+      setWatchlist: (items) => set({ watchlist: items }),
 
       setApiKey: (key) => {
         set({ apiKey: key })

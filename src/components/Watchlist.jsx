@@ -46,16 +46,27 @@ const usd = (n) =>
   (n ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
 
 export default function Watchlist() {
-  const { userId } = useStore()
-  const [items, setItems]           = useState([])
-  const [enriched, setEnriched]     = useState({})
-  const [input, setInput]           = useState('')
-  const [adding, setAdding]         = useState(false)
-  const [addError, setAddError]     = useState(null)
-  const [removing, setRemoving]     = useState(null)
-  const [loading, setLoading]       = useState(true)
+  const { userId, watchlist: storedWatchlist, setWatchlist } = useStore()
 
-  // Load watchlist from DB
+  // Bootstrap from persisted store so items survive page reloads without a DB round-trip
+  const [items, _setItems]      = useState(storedWatchlist ?? [])
+  const [enriched, setEnriched] = useState({})
+  const [input, setInput]       = useState('')
+  const [adding, setAdding]     = useState(false)
+  const [addError, setAddError] = useState(null)
+  const [removing, setRemoving] = useState(null)
+  const [loading, setLoading]   = useState(!(storedWatchlist?.length))
+
+  // Keep store in sync whenever items change
+  const setItems = (updaterOrValue) => {
+    _setItems((prev) => {
+      const next = typeof updaterOrValue === 'function' ? updaterOrValue(prev) : updaterOrValue
+      setWatchlist(next)
+      return next
+    })
+  }
+
+  // Sync from DB in the background to catch any changes from other sessions
   useEffect(() => {
     if (!userId) return
     let cancelled = false
@@ -63,10 +74,9 @@ export default function Watchlist() {
       .from('watchlist')
       .select('*')
       .eq('user_id', userId)
-      .order('created_at', { ascending: true })
       .then(({ data }) => {
-        if (cancelled) return
-        setItems(data ?? [])
+        if (cancelled || !data) return
+        setItems(data)
         setLoading(false)
       })
     return () => { cancelled = true }
@@ -125,7 +135,7 @@ export default function Watchlist() {
     setRemoving(null)
   }
 
-  if (loading) return null
+  if (loading && !items.length) return null
 
   return (
     <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
