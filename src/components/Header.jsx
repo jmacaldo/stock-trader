@@ -38,9 +38,9 @@ export default function Header({ portfolioValue, realSummary, view, onViewChange
 
   const isPaper = view === 'dashboard'
   const totalValue = isPaper ? (portfolioValue ?? 0) : (realSummary?.totalValue ?? 0)
-  const pnl       = isPaper ? (portfolioValue ?? 0) - startingBalance : (realSummary?.totalGain ?? 0)
+  const pnl       = isPaper ? (portfolioValue ?? 0) - invested : (realSummary?.totalGain ?? 0)
   const pnlPct    = isPaper
-    ? (startingBalance > 0 ? (pnl / startingBalance) * 100 : 0)
+    ? (invested > 0 ? (pnl / invested) * 100 : 0)
     : (realSummary?.totalGainPct ?? 0)
   const isUp = pnl >= 0
   const hasData = isPaper ? true : !!realSummary
