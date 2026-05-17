@@ -188,6 +188,9 @@ export default function Watchlist() {
                 const sig = q ? computeSignal(q) : null
                 const changePct = q?.regularMarketChangePercent ?? null
                 const isUp = (changePct ?? 0) >= 0
+                const marketTime = q?.regularMarketTime
+                  ? new Date(q.regularMarketTime * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+                  : null
 
                 return (
                   <tr key={item.symbol} className="border-t border-gray-100 dark:border-gray-800/40 hover:bg-gray-50 dark:hover:bg-gray-800/20 transition-colors">
@@ -195,8 +198,9 @@ export default function Watchlist() {
                       <div className="font-mono font-bold text-gray-900 dark:text-white text-sm">{item.symbol}</div>
                       {item.name && <div className="text-xs text-gray-400 dark:text-gray-600 truncate max-w-[140px]">{item.name}</div>}
                     </td>
-                    <td className="text-right px-4 py-3 text-gray-700 dark:text-gray-200 tabular-nums text-sm">
-                      {q ? usd(q.regularMarketPrice) : '—'}
+                    <td className="text-right px-4 py-3 tabular-nums text-sm">
+                      <div className="text-gray-700 dark:text-gray-200">{q ? usd(q.regularMarketPrice) : '—'}</div>
+                      {marketTime && <div className="text-xs text-gray-300 dark:text-gray-700">{marketTime}</div>}
                     </td>
                     <td className={`text-right px-4 py-3 tabular-nums text-sm font-medium ${isUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                       {changePct != null ? `${isUp ? '+' : ''}${changePct.toFixed(2)}%` : '—'}
