@@ -45,7 +45,7 @@ const SIGNAL_STYLES = {
 const usd = (n) =>
   (n ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
 
-export default function Watchlist() {
+export default function Watchlist({ onSelect }) {
   const { userId, watchlist: storedWatchlist, setWatchlist } = useStore()
 
   // Bootstrap from persisted store so items survive page reloads without a DB round-trip
@@ -54,8 +54,9 @@ export default function Watchlist() {
   const [input, setInput]       = useState('')
   const [adding, setAdding]     = useState(false)
   const [addError, setAddError] = useState(null)
-  const [removing, setRemoving] = useState(null)
-  const [loading, setLoading]   = useState(!(storedWatchlist?.length))
+  const [removing, setRemoving]   = useState(null)
+  const [selecting, setSelecting] = useState(null)
+  const [loading, setLoading]     = useState(!(storedWatchlist?.length))
 
   // Keep store in sync whenever items change
   const setItems = (updaterOrValue) => {
@@ -128,6 +129,17 @@ export default function Watchlist() {
     }
   }
 
+  const handleSelect = async (symbol) => {
+    if (selecting) return
+    setSelecting(symbol)
+    try {
+      const quote = await fetchQuote(symbol)
+      onSelect?.(quote)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } catch {}
+    setSelecting(null)
+  }
+
   const handleRemove = async (symbol) => {
     setRemoving(symbol)
     await supabase.from('watchlist').delete().match({ user_id: userId, symbol })
@@ -192,11 +204,21 @@ export default function Watchlist() {
                   ? new Date(q.regularMarketTime * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
                   : null
 
+                const busy = selecting === item.symbol
                 return (
-                  <tr key={item.symbol} className="border-t border-gray-100 dark:border-gray-800/40 hover:bg-gray-50 dark:hover:bg-gray-800/20 transition-colors">
+                  <tr
+                    key={item.symbol}
+                    onClick={() => handleSelect(item.symbol)}
+                    className="border-t border-gray-100 dark:border-gray-800/40 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/20 transition-colors"
+                  >
                     <td className="px-4 py-3">
-                      <div className="font-mono font-bold text-gray-900 dark:text-white text-sm">{item.symbol}</div>
-                      {item.name && <div className="text-xs text-gray-400 dark:text-gray-600 truncate max-w-[140px]">{item.name}</div>}
+                      <div className="flex items-center gap-1.5">
+                        {busy && <div className="w-3 h-3 border border-gray-300 dark:border-gray-600 border-t-emerald-500 rounded-full animate-spin shrink-0" />}
+                        <div>
+                          <div className="font-mono font-bold text-gray-900 dark:text-white text-sm">{item.symbol}</div>
+                          {item.name && <div className="text-xs text-gray-400 dark:text-gray-600 truncate max-w-[140px]">{item.name}</div>}
+                        </div>
+                      </div>
                     </td>
                     <td className="text-right px-4 py-3 tabular-nums text-sm">
                       <div className="text-gray-700 dark:text-gray-200">{q ? usd(q.regularMarketPrice) : '—'}</div>
@@ -221,7 +243,7 @@ export default function Watchlist() {
                     </td>
                     <td className="px-4 py-3">
                       <button
-                        onClick={() => handleRemove(item.symbol)}
+                        onClick={(e) => { e.stopPropagation(); handleRemove(item.symbol) }}
                         disabled={removing === item.symbol}
                         className="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
                         title="Remove"

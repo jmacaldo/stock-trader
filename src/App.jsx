@@ -96,7 +96,7 @@ export default function App() {
                 <RealHoldings onSummaryChange={setRealSummary} />
               </Suspense>
               <Suspense fallback={null}>
-                <Watchlist />
+                <Watchlist onSelect={(quote) => openModal(quote)} />
               </Suspense>
             </div>
             <div className={`space-y-5${view === 'holdings' ? ' hidden' : ''}`}>
