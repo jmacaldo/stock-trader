@@ -10,10 +10,10 @@ export async function loadData(userId) {
   return { account, positions: positions ?? [], trades: trades ?? [] }
 }
 
-// Upsert the account row (balance + starting balance + api key)
-export function syncAccount(userId, balance, startingBalance, apiKey) {
+// Upsert the account row (balance + starting balance + api key + wallet)
+export function syncAccount(userId, balance, startingBalance, apiKey, wallet = 0) {
   return supabase.from('accounts').upsert(
-    { user_id: userId, balance, starting_balance: startingBalance, api_key: apiKey, updated_at: new Date().toISOString() },
+    { user_id: userId, balance, starting_balance: startingBalance, api_key: apiKey, wallet, updated_at: new Date().toISOString() },
     { onConflict: 'user_id' }
   )
 }

@@ -21,8 +21,8 @@ export const useStore = create(
 
       setApiKey: (key) => {
         set({ apiKey: key })
-        const { userId, balance, startingBalance } = get()
-        if (userId) syncAccount(userId, balance, startingBalance, key).catch(console.error)
+        const { userId, balance, startingBalance, wallet } = get()
+        if (userId) syncAccount(userId, balance, startingBalance, key, wallet).catch(console.error)
       },
 
       clearApiKey: () => set({ apiKey: '' }),
@@ -41,6 +41,7 @@ export const useStore = create(
           balance: parseFloat(account.balance),
           startingBalance: parseFloat(account.starting_balance),
           apiKey: account.api_key || get().apiKey,
+          wallet: parseFloat(account.wallet ?? 0),
           portfolio,
           trades: trades.map((t) => ({
             id: t.id,
@@ -79,7 +80,7 @@ export const useStore = create(
 
         if (userId) {
           Promise.all([
-            syncAccount(userId, balance, startingBalance, apiKey),
+            syncAccount(userId, balance, startingBalance, apiKey, get().wallet),
             syncPosition(userId, symbol, newPosition),
             insertTrade(userId, trade),
           ]).catch(console.error)
@@ -115,7 +116,7 @@ export const useStore = create(
 
         if (userId) {
           Promise.all([
-            syncAccount(userId, newBalance, startingBalance, apiKey),
+            syncAccount(userId, newBalance, startingBalance, apiKey, newWallet),
             syncPosition(userId, symbol, removedPosition ? null : newPortfolio[symbol]),
             insertTrade(userId, trade),
           ]).catch(console.error)
@@ -131,7 +132,7 @@ export const useStore = create(
         if (userId) {
           Promise.all([
             clearUserData(userId),
-            syncAccount(userId, amount, amount, apiKey),
+            syncAccount(userId, amount, amount, apiKey, 0),
           ]).catch(console.error)
         }
       },
