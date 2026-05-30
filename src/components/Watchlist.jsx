@@ -116,9 +116,10 @@ export default function Watchlist({ onSelect }) {
       if (!quoteResult && !enrichedData[symbol]) { setAddError('Symbol not found'); return }
 
       const name = quoteResult?.shortName ?? null
+      const addedPrice = enrichedData[symbol]?.regularMarketPrice ?? quoteResult?.regularMarketPrice ?? null
       const { data: rows, error } = await supabase
         .from('watchlist')
-        .insert({ user_id: userId, symbol, name })
+        .insert({ user_id: userId, symbol, name, added_price: addedPrice })
         .select()
       if (error?.code === '23505') { setAddError('Already in watchlist'); return }
       if (error) throw error
@@ -196,7 +197,7 @@ export default function Watchlist({ onSelect }) {
               <tr className="text-xs text-gray-400 dark:text-gray-600 uppercase tracking-wide border-b border-gray-100 dark:border-gray-800/50">
                 <th className="text-left px-4 py-2.5 font-medium">Symbol</th>
                 <th className="text-right px-4 py-2.5 font-medium">Price</th>
-                <th className="text-right px-4 py-2.5 font-medium">Change</th>
+                <th className="text-right px-4 py-2.5 font-medium" title="% change since added to watchlist">Change</th>
                 <th className="text-right px-4 py-2.5 font-medium">Signal</th>
                 <th className="px-4 py-2.5" />
               </tr>
@@ -205,7 +206,9 @@ export default function Watchlist({ onSelect }) {
               {items.map((item) => {
                 const q = enriched[item.symbol]
                 const sig = q ? computeSignal(q) : null
-                const changePct = q?.regularMarketChangePercent ?? null
+                const changePct = q && item.added_price
+                  ? ((q.regularMarketPrice - item.added_price) / item.added_price) * 100
+                  : q?.regularMarketChangePercent ?? null
                 const isUp = (changePct ?? 0) >= 0
                 const marketTime = q?.regularMarketTime
                   ? formatAge(new Date(q.regularMarketTime * 1000))
@@ -233,6 +236,9 @@ export default function Watchlist({ onSelect }) {
                     </td>
                     <td className={`text-right px-4 py-3 tabular-nums text-sm font-medium ${isUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                       {changePct != null ? `${isUp ? '+' : ''}${changePct.toFixed(2)}%` : '—'}
+                      {item.added_price && (
+                        <div className="text-xs text-gray-300 dark:text-gray-700 font-normal">{usd(item.added_price)}</div>
+                      )}
                     </td>
                     <td className="text-right px-4 py-3">
                       {sig ? (
