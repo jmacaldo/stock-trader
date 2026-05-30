@@ -80,7 +80,7 @@ export default function Watchlist({ onSelect }) {
       .eq('user_id', userId)
       .then(({ data }) => {
         if (cancelled || !data) return
-        setItems(data)
+setItems(data)
         setLoading(false)
       })
     return () => { cancelled = true }
@@ -119,7 +119,7 @@ export default function Watchlist({ onSelect }) {
       const addedPrice = enrichedData[symbol]?.regularMarketPrice ?? quoteResult?.regularMarketPrice ?? null
       const { data: rows, error } = await supabase
         .from('watchlist')
-        .insert({ user_id: userId, symbol, name, added_price: addedPrice })
+        .insert({ user_id: userId, symbol, name, added_price: addedPrice, added_at: new Date().toISOString() })
         .select()
       if (error?.code === '23505') { setAddError('Already in watchlist'); return }
       if (error) throw error
@@ -237,9 +237,9 @@ export default function Watchlist({ onSelect }) {
                     </td>
                     <td className="text-right px-4 py-3 tabular-nums text-sm text-gray-400 dark:text-gray-500">
                       {item.added_price ? usd(item.added_price) : '—'}
-                      {item.created_at && (
+                      {item.added_at && (
                         <div className="text-xs text-gray-300 dark:text-gray-700">
-                          {new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {new Date(item.added_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </div>
                       )}
                     </td>
