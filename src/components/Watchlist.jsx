@@ -237,6 +237,11 @@ export default function Watchlist({ onSelect }) {
                     </td>
                     <td className="text-right px-4 py-3 tabular-nums text-sm text-gray-400 dark:text-gray-500">
                       {item.added_price ? usd(item.added_price) : '—'}
+                      {item.created_at && (
+                        <div className="text-xs text-gray-300 dark:text-gray-700">
+                          {new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </div>
+                      )}
                     </td>
                     <td className={`text-right px-4 py-3 tabular-nums text-sm font-medium ${isUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                       {changePct != null ? `${isUp ? '+' : ''}${changePct.toFixed(2)}%` : '—'}
