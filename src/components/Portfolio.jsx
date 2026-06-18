@@ -151,7 +151,6 @@ export default function Portfolio({ onValueChange }) {
     totalCost += cost
     totalPnl += pnl
     return { sym, shares, avgCost, name, purchVal, current, value, cost, pnl, pnlPct, change }
-    console.log("this is a test" );
   })
 
   
@@ -174,7 +173,7 @@ export default function Portfolio({ onValueChange }) {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-sm min-w-[560px]">
+        <table className="w-full text-sm min-w-[660px]">
           <thead>
             <tr className="text-xs text-gray-400 dark:text-gray-600 uppercase tracking-wide border-b border-gray-100 dark:border-gray-800/50">
               <th className="text-left px-4 py-2.5 font-medium">Symbol</th>
@@ -182,13 +181,14 @@ export default function Portfolio({ onValueChange }) {
               <th className="text-right px-4 py-2.5 font-medium">Cost</th>
               <th className="text-right px-4 py-2.5 font-medium">Live Price</th>
               <th className="text-right px-4 py-2.5 font-medium">Signal</th>
+              <th className="text-right px-4 py-2.5 font-medium">Invested</th>
               <th className="text-right px-4 py-2.5 font-medium">Live Value</th>
               <th className="text-right px-4 py-2.5 font-medium">P&L</th>
               <th className="px-4 py-2.5" />
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ sym, shares, avgCost, name, current, value, pnl, pnlPct }) => {
+            {rows.map(({ sym, shares, avgCost, name, current, value, cost, pnl, pnlPct }) => {
               const sig = computeSignal(enrichedData[sym], { netInvested: shares * avgCost, netShares: shares })
               return (
                 <Fragment key={sym}>
@@ -214,6 +214,7 @@ export default function Portfolio({ onValueChange }) {
                       <span className="text-xs text-gray-300 dark:text-gray-700">—</span>
                     )}
                   </td>
+                  <td className="text-right px-4 py-3 text-gray-500 dark:text-gray-400 tabular-nums">{usd(cost)}</td>
                   <td className="text-right px-4 py-3 text-gray-900 dark:text-white tabular-nums font-semibold">{usd(value)}</td>
                   <td className="text-right px-4 py-3">
                     <div className={`font-semibold tabular-nums ${pnl >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
@@ -281,7 +282,7 @@ export default function Portfolio({ onValueChange }) {
           {symbols.length > 1 && (
             <tfoot>
               <tr className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/30">
-                <td colSpan={5} className="px-4 py-2.5 text-xs text-gray-500 font-semibold uppercase tracking-wide">Total</td>
+                <td colSpan={6} className="px-4 py-2.5 text-xs text-gray-500 font-semibold uppercase tracking-wide">Total</td>
                 <td className="text-right px-4 py-2.5 text-gray-900 dark:text-white font-bold tabular-nums">{usd(totalValue)}</td>
                 <td className={`text-right px-4 py-2.5 font-bold tabular-nums ${totalPnl >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                   {totalPnl >= 0 ? '+' : ''}{usd(totalPnl)}
