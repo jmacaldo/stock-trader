@@ -137,11 +137,21 @@ export const useStore = create(
         }
       },
 
-      // Deletes every paper position — balance, wallet, and trade history are untouched
-      clearPortfolio: () => {
+      // Deletes every paper position — balance, wallet, and trade history are untouched.
+      // Waits for the DB delete to actually succeed before clearing local state:
+      // clearing optimistically and only logging failures let a silently-failed
+      // delete (e.g. an RLS policy rejection) look like it worked, only for
+      // hydrateFromDb to bring the "deleted" rows right back on next load.
+      clearPortfolio: async () => {
         const { userId } = get()
+        if (!userId) { set({ portfolio: {} }); return {} }
+        const { error } = await clearPositions(userId)
+        if (error) {
+          console.error('clearPortfolio failed:', error)
+          return { error: error.message }
+        }
         set({ portfolio: {} })
-        if (userId) clearPositions(userId).catch(console.error)
+        return {}
       },
     }),
     { name: 'paper-trader-v1' }
