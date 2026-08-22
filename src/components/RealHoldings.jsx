@@ -231,12 +231,22 @@ export default function RealHoldings({ onSummaryChange }) {
       })
   }, [userId])
 
-  // Aggregate net positions per symbol (buys - sells)
+  // Aggregate net positions per symbol (buys - sells). costBasis (gross buys,
+  // never reduced by sells) is kept alongside netInvested so closed positions
+  // can compute a meaningful realized return % — for a fully closed position
+  // netInvested is just the mirror of realized P&L, so P&L / netInvested is
+  // mathematically always ±100% and useless as a percentage.
   const positionMap = {}
   for (const t of transactions) {
-    if (!positionMap[t.symbol]) positionMap[t.symbol] = { shares: 0, name: t.name, netInvested: 0 }
-    if (t.type === 'buy') { positionMap[t.symbol].shares += t.shares; positionMap[t.symbol].netInvested += t.cashInvested }
-    else                  { positionMap[t.symbol].shares -= t.shares; positionMap[t.symbol].netInvested -= t.cashInvested }
+    if (!positionMap[t.symbol]) positionMap[t.symbol] = { shares: 0, name: t.name, netInvested: 0, costBasis: 0 }
+    if (t.type === 'buy') {
+      positionMap[t.symbol].shares += t.shares
+      positionMap[t.symbol].netInvested += t.cashInvested
+      positionMap[t.symbol].costBasis += t.cashInvested
+    } else {
+      positionMap[t.symbol].shares -= t.shares
+      positionMap[t.symbol].netInvested -= t.cashInvested
+    }
   }
   const activePositions = Object.entries(positionMap)
     .filter(([, p]) => p.shares > 0.000001)
@@ -379,18 +389,25 @@ export default function RealHoldings({ onSummaryChange }) {
   const stroke      = totalIsUp ? '#34d399' : '#f87171'
   const gradId      = `rh-${totalIsUp ? 'up' : 'dn'}`
 
-  const positions = activePositions.map((p) => {
-    const netInvested = positionMap[p.symbol].netInvested
-    const price = prices[p.symbol] ?? null
-    const currentValue = price != null ? price * p.shares : null
-    const pnl = currentValue != null ? currentValue - netInvested : null
-    const pnlPct = pnl != null && netInvested > 0 ? (pnl / netInvested) * 100 : null
-    return { symbol: p.symbol, name: p.name, shares: p.shares, netInvested, currentValue, pnl, pnlPct }
+  // Every symbol ever traded — open positions get a live value, closed ones
+  // (shares == 0) are flagged so the summary widget can list realized P&L too.
+  const positions = Object.entries(positionMap).map(([symbol, p]) => {
+    const closed = p.shares <= 0.000001
+    const price = prices[symbol] ?? null
+    const currentValue = closed ? 0 : (price != null ? price * p.shares : null)
+    const pnl = currentValue != null ? currentValue - p.netInvested : null
+    const pnlPct = pnl == null ? null
+      : closed ? (p.costBasis > 0 ? (pnl / p.costBasis) * 100 : null)
+      : (p.netInvested > 0 ? (pnl / p.netInvested) * 100 : null)
+    return { symbol, name: p.name, shares: p.shares, netInvested: p.netInvested, costBasis: p.costBasis, currentValue, pnl, pnlPct, closed }
   })
+  const allPositionsKey = Object.entries(positionMap)
+    .map(([s, p]) => `${s}:${p.shares.toFixed(6)}:${p.netInvested.toFixed(2)}`)
+    .sort().join(',')
 
   useEffect(() => {
     onSummaryChange?.({ totalValue, totalGain, totalGainPct, totalInvested, positions })
-  }, [totalValue, totalGain, totalGainPct, totalInvested, holdingsKey, prices])
+  }, [totalValue, totalGain, totalGainPct, totalInvested, allPositionsKey, prices])
 
   if (loading) return null
 
