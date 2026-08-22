@@ -207,6 +207,7 @@ export default function RealHoldings({ onSummaryChange }) {
   const [formError, setFormError]           = useState(null)
   const [deleting, setDeleting]             = useState(null)
   const [enrichedData, setEnrichedData]     = useState({})
+  const [txCollapsed, setTxCollapsed]       = useState(true)
   const tickColor = dark ? '#4b5563' : '#9ca3af'
 
   // Load all transactions from DB
@@ -420,7 +421,6 @@ export default function RealHoldings({ onSummaryChange }) {
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Real Holdings</h2>
           {transactions.length > 0 && (
             <span className={`text-xs font-bold ${totalIsUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
               {totalIsUp ? '+' : ''}{usd(totalGain)} ({totalIsUp ? '+' : ''}{totalGainPct.toFixed(2)}%)
@@ -591,148 +591,166 @@ export default function RealHoldings({ onSummaryChange }) {
 
       {/* Transaction table */}
       {transactions.length > 0 && (
-        <div className="overflow-x-auto scrollbar-hide">
-          <table className="w-full text-sm min-w-[1020px]">
-            <thead>
-              <tr className="text-xs text-gray-400 dark:text-gray-600 uppercase tracking-wide border-b border-gray-100 dark:border-gray-800/50">
-                <th className="text-left px-4 py-2.5 font-medium">Date</th>
-                <th className="text-left px-4 py-2.5 font-medium">Type</th>
-                <th className="text-left px-4 py-2.5 font-medium">Symbol</th>
-                <th className="text-right px-4 py-2.5 font-medium">Shares</th>
-                <th className="text-right px-4 py-2.5 font-medium">Price Paid</th>
-                <th className="text-right px-4 py-2.5 font-medium">Live Price</th>
-                <th className="text-right px-4 py-2.5 font-medium">Δ Price</th>
-                <th className="text-right px-4 py-2.5 font-medium">Cash Paid</th>
-                <th className="text-right px-4 py-2.5 font-medium">Live Value</th>
-                <th className="text-right px-4 py-2.5 font-medium">P&amp;L</th>
-                <th className="px-4 py-2.5" />
-              </tr>
-            </thead>
-            <tbody>
-              {sortedTx.map((tx) => (
-                <tr key={tx.id} className="border-t border-gray-100 dark:border-gray-800/40 hover:bg-gray-50 dark:hover:bg-gray-800/20 transition-colors">
-                  <td className="px-4 py-3 text-xs text-gray-400 dark:text-gray-500 tabular-nums whitespace-nowrap">
-                    {new Date(tx.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold uppercase ${
-                      tx.type === 'buy'
-                        ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
-                        : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
-                    }`}>
-                      {tx.type}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <button onClick={() => setSelectedSymbol(tx.symbol)} className="text-left group">
-                      <div className="flex items-center gap-1.5">
-                        <div className="font-mono font-bold text-gray-900 dark:text-white text-sm group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{tx.symbol}</div>
-                        {positionSignals[tx.symbol] && (() => {
-                          const sig = positionSignals[tx.symbol]
-                          return (
-                            <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-bold ${SIGNAL_STYLES[sig.signal].badge}`}>
-                              {sig.signal}
-                            </span>
-                          )
-                        })()}
-                      </div>
-                      {tx.name && <div className="text-xs text-gray-400 dark:text-gray-600 truncate max-w-[130px]">{tx.name}</div>}
-                    </button>
-                  </td>
-                  <td className="text-right px-4 py-3 text-gray-600 dark:text-gray-300 tabular-nums">
-                    {tx.shares < 1 ? tx.shares.toFixed(6) : tx.shares.toFixed(4)}
-                  </td>
-                  <td className="text-right px-4 py-3 tabular-nums text-sm text-gray-500 dark:text-gray-400">
-                    {usd(tx.cashInvested / tx.shares)}
-                  </td>
-                  <td className="text-right px-4 py-3 tabular-nums text-sm text-gray-700 dark:text-gray-200">
-                    {prices[tx.symbol] != null
-                      ? usd(prices[tx.symbol])
-                      : <span className="text-gray-300 dark:text-gray-700">—</span>}
-                  </td>
-                  {(() => {
-                    const pricePaid = tx.cashInvested / tx.shares
-                    const livePrice = prices[tx.symbol]
-                    if (livePrice == null) {
-                      return <td className="text-right px-4 py-3 text-gray-300 dark:text-gray-700 tabular-nums text-sm">—</td>
-                    }
-                    const delta = livePrice - pricePaid
-                    const deltaPct = (delta / pricePaid) * 100
-                    return (
-                      <td className={`text-right px-4 py-3 tabular-nums text-sm font-medium ${delta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                        <div>{delta >= 0 ? '+' : ''}{usd(delta)}</div>
-                        <div className="text-xs opacity-70">{deltaPct >= 0 ? '+' : ''}{deltaPct.toFixed(2)}%</div>
-                      </td>
-                    )
-                  })()}
-                  <td className={`text-right px-4 py-3 tabular-nums font-medium ${
-                    tx.type === 'sell' ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'
-                  }`}>
-                    {tx.type === 'sell' ? '-' : ''}{usd(tx.cashInvested)}
-                  </td>
-                  <td className="text-right px-4 py-3 tabular-nums text-sm text-gray-700 dark:text-gray-200 font-medium">
-                    {tx.type === 'buy' && prices[tx.symbol] != null
-                      ? usd(tx.shares * prices[tx.symbol])
-                      : <span className="text-gray-300 dark:text-gray-700">—</span>}
-                  </td>
-                  {(() => {
-                    if (tx.type !== 'buy' || prices[tx.symbol] == null) {
-                      return <td className="text-right px-4 py-3 text-gray-300 dark:text-gray-700 tabular-nums text-sm">—</td>
-                    }
-                    const txPnl = tx.shares * prices[tx.symbol] - tx.cashInvested
-                    const txPnlPct = tx.cashInvested > 0 ? (txPnl / tx.cashInvested) * 100 : 0
-                    return (
-                      <td className={`text-right px-4 py-3 tabular-nums text-sm font-medium ${txPnl >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                        <div>{txPnl >= 0 ? '+' : ''}{usd(txPnl)}</div>
-                        <div className="text-xs opacity-70">{txPnlPct >= 0 ? '+' : ''}{txPnlPct.toFixed(2)}%</div>
-                      </td>
-                    )
-                  })()}
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => openEdit(tx)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" title="Edit">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => handleDelete(tx.id)}
-                        disabled={deleting === tx.id}
-                        className="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
-                        title="Remove"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
-                  </td>
+        <div>
+          <button
+            onClick={() => setTxCollapsed((v) => !v)}
+            className="w-full px-4 py-3 flex items-center justify-between text-left border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/20 transition-colors"
+          >
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              Transactions <span className="text-gray-300 dark:text-gray-700 normal-case font-normal">({transactions.length})</span>
+            </span>
+            <svg
+              className={`w-4 h-4 text-gray-400 dark:text-gray-600 transition-transform ${txCollapsed ? '' : 'rotate-180'}`}
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {!txCollapsed && (
+          <div className="overflow-x-auto scrollbar-hide">
+            <table className="w-full text-sm min-w-[1020px]">
+              <thead>
+                <tr className="text-xs text-gray-400 dark:text-gray-600 uppercase tracking-wide border-b border-gray-100 dark:border-gray-800/50">
+                  <th className="text-left px-4 py-2.5 font-medium">Date</th>
+                  <th className="text-left px-4 py-2.5 font-medium">Type</th>
+                  <th className="text-left px-4 py-2.5 font-medium">Symbol</th>
+                  <th className="text-right px-4 py-2.5 font-medium">Shares</th>
+                  <th className="text-right px-4 py-2.5 font-medium">Price Paid</th>
+                  <th className="text-right px-4 py-2.5 font-medium">Live Price</th>
+                  <th className="text-right px-4 py-2.5 font-medium">Δ Price</th>
+                  <th className="text-right px-4 py-2.5 font-medium">Cash Paid</th>
+                  <th className="text-right px-4 py-2.5 font-medium">Live Value</th>
+                  <th className="text-right px-4 py-2.5 font-medium">P&amp;L</th>
+                  <th className="px-4 py-2.5" />
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t-2 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/30">
-                <td colSpan={7} className="px-4 py-2.5 text-xs text-gray-500 font-semibold uppercase tracking-wide">
-                  Total · {activePositions.length} position{activePositions.length !== 1 ? 's' : ''}
-                </td>
-                <td className="text-right px-4 py-2.5 text-gray-700 dark:text-gray-300 font-bold tabular-nums text-sm">
-                  {usd(totalInvested)}
-                </td>
-                <td className="text-right px-4 py-2.5 text-gray-900 dark:text-white font-bold tabular-nums text-sm">
-                  {totalValue > 0 ? usd(totalValue) : '—'}
-                </td>
-                <td className={`text-right px-4 py-2.5 font-bold tabular-nums text-sm ${totalIsUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                  {totalValue > 0 ? (
-                    <>
-                      <div>{totalIsUp ? '+' : ''}{usd(totalGain)}</div>
-                      <div className="text-xs font-medium opacity-70">{totalGainPct >= 0 ? '+' : ''}{totalGainPct.toFixed(2)}%</div>
-                    </>
-                  ) : '—'}
-                </td>
-                <td />
-              </tr>
-            </tfoot>
-          </table>
+              </thead>
+              <tbody>
+                {sortedTx.map((tx) => (
+                  <tr key={tx.id} className="border-t border-gray-100 dark:border-gray-800/40 hover:bg-gray-50 dark:hover:bg-gray-800/20 transition-colors">
+                    <td className="px-4 py-3 text-xs text-gray-400 dark:text-gray-500 tabular-nums whitespace-nowrap">
+                      {new Date(tx.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold uppercase ${
+                        tx.type === 'buy'
+                          ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                          : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                      }`}>
+                        {tx.type}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => setSelectedSymbol(tx.symbol)} className="text-left group">
+                        <div className="flex items-center gap-1.5">
+                          <div className="font-mono font-bold text-gray-900 dark:text-white text-sm group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{tx.symbol}</div>
+                          {positionSignals[tx.symbol] && (() => {
+                            const sig = positionSignals[tx.symbol]
+                            return (
+                              <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-bold ${SIGNAL_STYLES[sig.signal].badge}`}>
+                                {sig.signal}
+                              </span>
+                            )
+                          })()}
+                        </div>
+                        {tx.name && <div className="text-xs text-gray-400 dark:text-gray-600 truncate max-w-[130px]">{tx.name}</div>}
+                      </button>
+                    </td>
+                    <td className="text-right px-4 py-3 text-gray-600 dark:text-gray-300 tabular-nums">
+                      {tx.shares < 1 ? tx.shares.toFixed(6) : tx.shares.toFixed(4)}
+                    </td>
+                    <td className="text-right px-4 py-3 tabular-nums text-sm text-gray-500 dark:text-gray-400">
+                      {usd(tx.cashInvested / tx.shares)}
+                    </td>
+                    <td className="text-right px-4 py-3 tabular-nums text-sm text-gray-700 dark:text-gray-200">
+                      {prices[tx.symbol] != null
+                        ? usd(prices[tx.symbol])
+                        : <span className="text-gray-300 dark:text-gray-700">—</span>}
+                    </td>
+                    {(() => {
+                      const pricePaid = tx.cashInvested / tx.shares
+                      const livePrice = prices[tx.symbol]
+                      if (livePrice == null) {
+                        return <td className="text-right px-4 py-3 text-gray-300 dark:text-gray-700 tabular-nums text-sm">—</td>
+                      }
+                      const delta = livePrice - pricePaid
+                      const deltaPct = (delta / pricePaid) * 100
+                      return (
+                        <td className={`text-right px-4 py-3 tabular-nums text-sm font-medium ${delta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                          <div>{delta >= 0 ? '+' : ''}{usd(delta)}</div>
+                          <div className="text-xs opacity-70">{deltaPct >= 0 ? '+' : ''}{deltaPct.toFixed(2)}%</div>
+                        </td>
+                      )
+                    })()}
+                    <td className={`text-right px-4 py-3 tabular-nums font-medium ${
+                      tx.type === 'sell' ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'
+                    }`}>
+                      {tx.type === 'sell' ? '-' : ''}{usd(tx.cashInvested)}
+                    </td>
+                    <td className="text-right px-4 py-3 tabular-nums text-sm text-gray-700 dark:text-gray-200 font-medium">
+                      {tx.type === 'buy' && prices[tx.symbol] != null
+                        ? usd(tx.shares * prices[tx.symbol])
+                        : <span className="text-gray-300 dark:text-gray-700">—</span>}
+                    </td>
+                    {(() => {
+                      if (tx.type !== 'buy' || prices[tx.symbol] == null) {
+                        return <td className="text-right px-4 py-3 text-gray-300 dark:text-gray-700 tabular-nums text-sm">—</td>
+                      }
+                      const txPnl = tx.shares * prices[tx.symbol] - tx.cashInvested
+                      const txPnlPct = tx.cashInvested > 0 ? (txPnl / tx.cashInvested) * 100 : 0
+                      return (
+                        <td className={`text-right px-4 py-3 tabular-nums text-sm font-medium ${txPnl >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                          <div>{txPnl >= 0 ? '+' : ''}{usd(txPnl)}</div>
+                          <div className="text-xs opacity-70">{txPnlPct >= 0 ? '+' : ''}{txPnlPct.toFixed(2)}%</div>
+                        </td>
+                      )
+                    })()}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => openEdit(tx)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" title="Edit">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => handleDelete(tx.id)}
+                          disabled={deleting === tx.id}
+                          className="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
+                          title="Remove"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/30">
+                  <td colSpan={7} className="px-4 py-2.5 text-xs text-gray-500 font-semibold uppercase tracking-wide">
+                    Total · {activePositions.length} position{activePositions.length !== 1 ? 's' : ''}
+                  </td>
+                  <td className="text-right px-4 py-2.5 text-gray-700 dark:text-gray-300 font-bold tabular-nums text-sm">
+                    {usd(totalInvested)}
+                  </td>
+                  <td className="text-right px-4 py-2.5 text-gray-900 dark:text-white font-bold tabular-nums text-sm">
+                    {totalValue > 0 ? usd(totalValue) : '—'}
+                  </td>
+                  <td className={`text-right px-4 py-2.5 font-bold tabular-nums text-sm ${totalIsUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                    {totalValue > 0 ? (
+                      <>
+                        <div>{totalIsUp ? '+' : ''}{usd(totalGain)}</div>
+                        <div className="text-xs font-medium opacity-70">{totalGainPct >= 0 ? '+' : ''}{totalGainPct.toFixed(2)}%</div>
+                      </>
+                    ) : '—'}
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          )}
         </div>
       )}
 
