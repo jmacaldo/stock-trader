@@ -121,13 +121,13 @@ export default function App() {
                   <PortfolioChart />
                 </Suspense>
                 <Portfolio onValueChange={setPortfolioValue} />
-                <History />
                 <Suspense fallback={null}>
                   <MarketMovers onSelect={(quote) => openModal(quote)} />
                 </Suspense>
                 <Suspense fallback={null}>
                   <MomentumScanner onSelect={(quote) => openModal(quote)} />
                 </Suspense>
+                <History />
               </div>
             )}
           </main>
