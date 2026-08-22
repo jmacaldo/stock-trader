@@ -1,7 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { STOCKS } from '../stocks'
 import { fetchQuote } from '../api'
 import { getTickerScore } from '../scoring/scoreCache'
+import { loadScanResults, saveScanResults } from '../scoring/scanDb'
 import { actionShortLabel, actionStyle } from '../scoring/actionStyles'
 import { formatAge, useNow } from '../time'
 
@@ -34,8 +35,18 @@ export default function MomentumScanner({ onSelect }) {
   const [scanning, setScanning] = useState(false)
   const [progress, setProgress] = useState(0)
   const [scannedAt, setScannedAt] = useState(null)
+  const [loaded, setLoaded] = useState(false)
   const [selecting, setSelecting] = useState(null)
   const cancelRef = useRef(false)
+
+  // Pick up the last scan's results from the DB so a page reload doesn't
+  // reset to "Not scanned yet" — the scan is objective/shared, not per-session.
+  useEffect(() => {
+    loadScanResults().then((saved) => {
+      if (saved) { setResults(saved.hits); setScannedAt(saved.scannedAt) }
+      setLoaded(true)
+    })
+  }, [])
 
   const scan = async () => {
     if (scanning) return
@@ -51,14 +62,23 @@ export default function MomentumScanner({ onSelect }) {
       done++
       setProgress(done)
       if (card && isReboundAction(card.decision.action)) {
-        hits.push({ ...stock, card })
+        hits.push({
+          symbol: stock.symbol,
+          name: stock.name,
+          action: card.decision.action,
+          pillarTotal: card.pillar_total,
+          trendScore: card.pillars.trend.score,
+          momentumScore: card.pillars.momentum.score,
+          reboundFlag: card.decision.flags.rebound[0] ?? null,
+        })
       }
     })
 
-    hits.sort((a, b) => b.card.pillar_total - a.card.pillar_total)
+    hits.sort((a, b) => b.pillarTotal - a.pillarTotal)
     setResults(hits)
     setScannedAt(new Date())
     setScanning(false)
+    saveScanResults(hits).catch(console.error)
   }
 
   const handleSelect = async (symbol) => {
@@ -93,7 +113,7 @@ export default function MomentumScanner({ onSelect }) {
         </button>
       </div>
 
-      {!scannedAt && !scanning && (
+      {loaded && !scannedAt && !scanning && (
         <div className="py-10 text-center">
           <p className="text-gray-400 dark:text-gray-600 text-sm">Not scanned yet</p>
           <p className="text-gray-300 dark:text-gray-700 text-xs mt-1 max-w-sm mx-auto">
@@ -123,9 +143,8 @@ export default function MomentumScanner({ onSelect }) {
               </tr>
             </thead>
             <tbody>
-              {results.map(({ symbol, name, card }) => {
+              {results.map(({ symbol, name, action, trendScore, momentumScore, reboundFlag }) => {
                 const busy = selecting === symbol
-                const rebound = card.decision.flags.rebound[0] ?? ''
                 return (
                   <tr
                     key={symbol}
@@ -142,18 +161,18 @@ export default function MomentumScanner({ onSelect }) {
                       </div>
                     </td>
                     <td className="text-right px-4 py-3 tabular-nums text-sm text-gray-600 dark:text-gray-300">
-                      {card.pillars.trend.score > 0 ? '+' : ''}{card.pillars.trend.score}
+                      {trendScore > 0 ? '+' : ''}{trendScore}
                     </td>
                     <td className="text-right px-4 py-3 tabular-nums text-sm text-gray-600 dark:text-gray-300">
-                      {card.pillars.momentum.score > 0 ? '+' : ''}{card.pillars.momentum.score}
+                      {momentumScore > 0 ? '+' : ''}{momentumScore}
                     </td>
                     <td className="text-right px-4 py-3">
-                      <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-bold whitespace-nowrap ${actionStyle(card.decision.action)}`}>
-                        {actionShortLabel(card.decision.action)}
+                      <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-bold whitespace-nowrap ${actionStyle(action)}`}>
+                        {actionShortLabel(action)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-400 dark:text-gray-600 max-w-[260px] truncate" title={rebound}>
-                      {rebound}
+                    <td className="px-4 py-3 text-xs text-gray-400 dark:text-gray-600 max-w-[260px] truncate" title={reboundFlag ?? ''}>
+                      {reboundFlag}
                     </td>
                   </tr>
                 )
