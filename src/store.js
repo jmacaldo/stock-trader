@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { syncAccount, syncPosition, insertTrade, clearUserData } from './db'
+import { syncAccount, syncPosition, insertTrade, clearUserData, clearPositions } from './db'
 
 const DEFAULT_BALANCE = 10000
 
@@ -135,6 +135,13 @@ export const useStore = create(
             syncAccount(userId, amount, amount, apiKey, 0),
           ]).catch(console.error)
         }
+      },
+
+      // Deletes every paper position — balance, wallet, and trade history are untouched
+      clearPortfolio: () => {
+        const { userId } = get()
+        set({ portfolio: {} })
+        if (userId) clearPositions(userId).catch(console.error)
       },
     }),
     { name: 'paper-trader-v1' }

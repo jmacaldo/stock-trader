@@ -51,3 +51,8 @@ export function clearUserData(userId) {
     supabase.from('trades').delete().eq('user_id', userId),
   ])
 }
+
+// Delete every paper-portfolio position, leaving balance/wallet/trades untouched
+export function clearPositions(userId) {
+  return supabase.from('portfolio').delete().eq('user_id', userId)
+}

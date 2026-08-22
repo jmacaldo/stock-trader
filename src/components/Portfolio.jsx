@@ -61,13 +61,20 @@ const SIGNAL_STYLES = {
 
 export default function Portfolio({ onValueChange }) {
   useNow()
-  const { portfolio, sellStock } = useStore()
+  const { portfolio, sellStock, clearPortfolio } = useStore()
   const [prices, setPrices]         = useState({})
   const [loading, setLoading]       = useState(false)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [selling, setSelling]       = useState(null)
   const [sellInput, setSellInput]   = useState('')
   const [sellError, setSellError]   = useState(null)
+  const [confirmClear, setConfirmClear] = useState(false)
+
+  const handleClearAll = () => {
+    if (!confirmClear) { setConfirmClear(true); return }
+    clearPortfolio()
+    setConfirmClear(false)
+  }
   const onValueChangeRef = useRef(onValueChange)
   onValueChangeRef.current = onValueChange
 
@@ -169,6 +176,20 @@ export default function Portfolio({ onValueChange }) {
               {formatAge(lastUpdated)}
             </span>
           )}
+          {confirmClear && (
+            <span className="text-xs text-gray-400 dark:text-gray-600">Delete all {symbols.length}? Balance & trades are kept.</span>
+          )}
+          <button
+            onClick={handleClearAll}
+            onBlur={() => setConfirmClear(false)}
+            className={`text-xs px-2.5 py-1 rounded-lg font-medium border transition-colors ${
+              confirmClear
+                ? 'bg-red-500 hover:bg-red-400 text-white border-red-500'
+                : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700'
+            }`}
+          >
+            {confirmClear ? 'Confirm Clear All' : 'Clear All'}
+          </button>
         </div>
       </div>
 
