@@ -11,10 +11,10 @@ const AUTH = { Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
 async function fetchMovers(count = 10) {
   const res = await fetch(`${MOVERS_URL}?count=${count}`, { headers: AUTH })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const { gainers, losers } = await res.json()
-  const times = [...gainers, ...losers].map((q) => q.regularMarketTime).filter(Boolean)
+  const { gainers, losers, actives } = await res.json()
+  const times = [...gainers, ...losers, ...(actives ?? [])].map((q) => q.regularMarketTime).filter(Boolean)
   const updatedAt = times.length ? new Date(Math.min(...times) * 1000) : new Date()
-  return { gainers, losers, updatedAt }
+  return { gainers, losers, actives: actives ?? [], updatedAt }
 }
 
 function ScoreBadge({ symbol }) {
@@ -45,11 +45,12 @@ function ScoreBadge({ symbol }) {
   )
 }
 
-function MoverRow({ q, isLoss, selecting, onSelect }) {
+function MoverRow({ q, selecting, onSelect }) {
   const busy = selecting === q.symbol
-  const clr = isLoss ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'
   const change = q.regularMarketChange ?? 0
   const changePct = q.regularMarketChangePercent ?? 0
+  const isLoss = changePct < 0
+  const clr = isLoss ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'
   const price = q.regularMarketPrice ?? 0
   return (
     <tr
@@ -80,12 +81,10 @@ function MoverRow({ q, isLoss, selecting, onSelect }) {
   )
 }
 
-function ColHead({ label, isLoss }) {
+function ColHead({ label, icon = '▲', color = 'text-emerald-600 dark:text-emerald-400' }) {
   return (
     <div className="px-3 py-2 flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800/30 border-b border-gray-100 dark:border-gray-800">
-      <span className={`text-xs font-bold ${isLoss ? 'text-red-500 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-        {isLoss ? '▼' : '▲'}
-      </span>
+      <span className={`text-xs font-bold ${color}`}>{icon}</span>
       <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">{label}</span>
     </div>
   )
@@ -107,6 +106,7 @@ export default function MarketMovers({ onSelect }) {
   useNow()
   const [gainers, setGainers] = useState([])
   const [losers, setLosers]   = useState([])
+  const [actives, setActives] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
   const [sortBy, setSortBy]   = useState('pct')
@@ -117,9 +117,10 @@ export default function MarketMovers({ onSelect }) {
     setLoading(true)
     setError(null)
     try {
-      const { gainers: g, losers: l, updatedAt } = await fetchMovers(10)
+      const { gainers: g, losers: l, actives: a, updatedAt } = await fetchMovers(10)
       setGainers(g)
       setLosers(l)
+      setActives(a)
       setUpdated(updatedAt)
     } catch (err) {
       setError(err.message)
@@ -200,25 +201,36 @@ export default function MarketMovers({ onSelect }) {
           <div className="w-5 h-5 border-2 border-gray-200 dark:border-gray-800 border-t-emerald-500 rounded-full animate-spin" />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100 dark:divide-gray-800">
+        <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-gray-100 dark:divide-gray-800">
           <div>
-            <ColHead label="Top Gainers" isLoss={false} />
+            <ColHead label="Top Gainers" icon="▲" color="text-emerald-600 dark:text-emerald-400" />
             <table className="w-full">
               <THead />
               <tbody>
                 {sorted(gainers, false).map((q) => (
-                  <MoverRow key={q.symbol} q={q} isLoss={false} selecting={selecting} onSelect={handleSelect} />
+                  <MoverRow key={q.symbol} q={q} selecting={selecting} onSelect={handleSelect} />
                 ))}
               </tbody>
             </table>
           </div>
           <div>
-            <ColHead label="Top Losers" isLoss={true} />
+            <ColHead label="Top Losers" icon="▼" color="text-red-500 dark:text-red-400" />
             <table className="w-full">
               <THead />
               <tbody>
                 {sorted(losers, true).map((q) => (
-                  <MoverRow key={q.symbol} q={q} isLoss={true} selecting={selecting} onSelect={handleSelect} />
+                  <MoverRow key={q.symbol} q={q} selecting={selecting} onSelect={handleSelect} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <ColHead label="Most Active" icon="⚡" color="text-blue-500 dark:text-blue-400" />
+            <table className="w-full">
+              <THead />
+              <tbody>
+                {actives.map((q) => (
+                  <MoverRow key={q.symbol} q={q} selecting={selecting} onSelect={handleSelect} />
                 ))}
               </tbody>
             </table>

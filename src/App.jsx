@@ -12,6 +12,7 @@ const PortfolioChart  = lazy(() => import('./components/PortfolioChart'))
 const RealHoldings    = lazy(() => import('./components/RealHoldings'))
 const HoldingsSummary = lazy(() => import('./components/HoldingsSummary'))
 const MarketMovers    = lazy(() => import('./components/MarketMovers'))
+const MomentumScanner = lazy(() => import('./components/MomentumScanner'))
 const SearchWidget    = lazy(() => import('./components/SearchWidget'))
 const Watchlist       = lazy(() => import('./components/Watchlist'))
 import ApiKeySetup from './components/ApiKeySetup'
@@ -123,6 +124,9 @@ export default function App() {
                 <History />
                 <Suspense fallback={null}>
                   <MarketMovers onSelect={(quote) => openModal(quote)} />
+                </Suspense>
+                <Suspense fallback={null}>
+                  <MomentumScanner onSelect={(quote) => openModal(quote)} />
                 </Suspense>
               </div>
             )}

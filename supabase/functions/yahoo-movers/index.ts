@@ -11,20 +11,22 @@ Deno.serve(async (req) => {
   const { searchParams } = new URL(req.url)
   const count = searchParams.get('count') ?? '10'
 
-  const [gainersRes, losersRes] = await Promise.all([
+  const screen = (scrId: string) =>
     fetch(
-      `https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?scrIds=day_gainers&count=${count}&formatted=false`,
+      `https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?scrIds=${scrId}&count=${count}&formatted=false`,
       { headers: { 'User-Agent': 'Mozilla/5.0' } }
-    ),
-    fetch(
-      `https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?scrIds=day_losers&count=${count}&formatted=false`,
-      { headers: { 'User-Agent': 'Mozilla/5.0' } }
-    ),
+    )
+
+  const [gainersRes, losersRes, activesRes] = await Promise.all([
+    screen('day_gainers'),
+    screen('day_losers'),
+    screen('most_actives'),
   ])
 
-  const [gainersJson, losersJson] = await Promise.all([
+  const [gainersJson, losersJson, activesJson] = await Promise.all([
     gainersRes.json(),
     losersRes.json(),
+    activesRes.json(),
   ])
 
   const pluck = (json: any) =>
@@ -47,7 +49,7 @@ Deno.serve(async (req) => {
     }))
 
   return new Response(
-    JSON.stringify({ gainers: pluck(gainersJson), losers: pluck(losersJson) }),
+    JSON.stringify({ gainers: pluck(gainersJson), losers: pluck(losersJson), actives: pluck(activesJson) }),
     { headers: { 'Content-Type': 'application/json', ...CORS } }
   )
 })
