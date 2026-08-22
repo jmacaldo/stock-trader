@@ -378,9 +378,18 @@ export default function RealHoldings({ onSummaryChange }) {
   const stroke      = totalIsUp ? '#34d399' : '#f87171'
   const gradId      = `rh-${totalIsUp ? 'up' : 'dn'}`
 
+  const positions = activePositions.map((p) => {
+    const netInvested = positionMap[p.symbol].netInvested
+    const price = prices[p.symbol] ?? null
+    const currentValue = price != null ? price * p.shares : null
+    const pnl = currentValue != null ? currentValue - netInvested : null
+    const pnlPct = pnl != null && netInvested > 0 ? (pnl / netInvested) * 100 : null
+    return { symbol: p.symbol, name: p.name, shares: p.shares, netInvested, currentValue, pnl, pnlPct }
+  })
+
   useEffect(() => {
-    onSummaryChange?.({ totalValue, totalGain, totalGainPct, totalInvested })
-  }, [totalValue, totalGain, totalGainPct, totalInvested])
+    onSummaryChange?.({ totalValue, totalGain, totalGainPct, totalInvested, positions })
+  }, [totalValue, totalGain, totalGainPct, totalInvested, holdingsKey, prices])
 
   if (loading) return null
 

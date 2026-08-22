@@ -8,11 +8,12 @@ import SearchModal from './components/SearchModal'
 import Portfolio from './components/Portfolio'
 import History from './components/History'
 
-const PortfolioChart = lazy(() => import('./components/PortfolioChart'))
-const RealHoldings   = lazy(() => import('./components/RealHoldings'))
-const MarketMovers   = lazy(() => import('./components/MarketMovers'))
-const SearchWidget   = lazy(() => import('./components/SearchWidget'))
-const Watchlist      = lazy(() => import('./components/Watchlist'))
+const PortfolioChart  = lazy(() => import('./components/PortfolioChart'))
+const RealHoldings    = lazy(() => import('./components/RealHoldings'))
+const HoldingsSummary = lazy(() => import('./components/HoldingsSummary'))
+const MarketMovers    = lazy(() => import('./components/MarketMovers'))
+const SearchWidget    = lazy(() => import('./components/SearchWidget'))
+const Watchlist       = lazy(() => import('./components/Watchlist'))
 import ApiKeySetup from './components/ApiKeySetup'
 import AuthScreen from './components/AuthScreen'
 import LoadingScreen from './components/LoadingScreen'
@@ -95,9 +96,14 @@ export default function App() {
             <div className={`space-y-5${view !== 'holdings' ? ' hidden' : ''}`}>
               {/* RealHoldings conditionally rendered — has Recharts charts that error at 0 dimensions */}
               {view === 'holdings' && (
-                <Suspense fallback={null}>
-                  <RealHoldings onSummaryChange={setRealSummary} />
-                </Suspense>
+                <>
+                  <Suspense fallback={null}>
+                    <HoldingsSummary positions={realSummary?.positions} />
+                  </Suspense>
+                  <Suspense fallback={null}>
+                    <RealHoldings onSummaryChange={setRealSummary} />
+                  </Suspense>
+                </>
               )}
               {/* Watchlist always mounted — no charts, state must survive tab switches */}
               <Suspense fallback={null}>
