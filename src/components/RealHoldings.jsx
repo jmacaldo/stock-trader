@@ -361,9 +361,10 @@ export default function RealHoldings({ onSummaryChange }) {
     setDeleting(null)
   }
 
-  // Totals: buys add, sells subtract
-  const totalInvested = transactions.reduce((s, t) =>
-    t.type === 'buy' ? s + t.cashInvested : s - t.cashInvested, 0)
+  // Totals: cash currently deployed in open positions only (excludes cash
+  // flow from positions already fully sold — that's realized P&L, not
+  // currently-invested capital).
+  const totalInvested = activePositions.reduce((s, p) => s + positionMap[p.symbol].netInvested, 0)
   const totalValue = activePositions.reduce((s, p) =>
     s + (prices[p.symbol] != null ? prices[p.symbol] * p.shares : 0), 0)
   const totalGain    = totalValue - totalInvested
