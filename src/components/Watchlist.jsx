@@ -3,6 +3,8 @@ import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../supabase'
 import { useStore } from '../store'
 import { fetchQuote } from '../api'
 import { formatAge, useNow } from '../time'
+import { getTickerScore } from '../scoring/scoreCache'
+import { actionShortLabel, actionStyle } from '../scoring/actionStyles'
 
 const QUOTES_URL = `${SUPABASE_URL}/functions/v1/yahoo-quotes`
 const AUTH       = { Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
@@ -53,6 +55,7 @@ export default function Watchlist({ onSelect }) {
   // Bootstrap from persisted store so items survive page reloads without a DB round-trip
   const [items, _setItems]      = useState(storedWatchlist ?? [])
   const [enriched, setEnriched] = useState({})
+  const [scores, setScores]     = useState({})
   const [input, setInput]       = useState('')
   const [adding, setAdding]     = useState(false)
   const [addError, setAddError] = useState(null)
@@ -95,6 +98,17 @@ setItems(data)
     refresh()
     const t = setInterval(refresh, 300_000)
     return () => clearInterval(t)
+  }, [symbolsKey])
+
+  // Fetch technical (Trend/Momentum/Macro) scores — cached client-side with a
+  // 1h TTL since they're derived from daily closes, not live quotes.
+  useEffect(() => {
+    const symbols = items.map((i) => i.symbol)
+    if (!symbols.length) { setScores({}); return }
+    let cancelled = false
+    Promise.all(symbols.map((sym) => getTickerScore(sym).then((card) => [sym, card])))
+      .then((pairs) => { if (!cancelled) setScores(Object.fromEntries(pairs)) })
+    return () => { cancelled = true }
   }, [symbolsKey])
 
   const handleAdd = async (e) => {
@@ -192,7 +206,7 @@ setItems(data)
       {/* Table */}
       {items.length > 0 && (
         <div className="overflow-x-auto scrollbar-hide">
-          <table className="w-full text-sm min-w-[580px]">
+          <table className="w-full text-sm min-w-[680px]">
             <thead>
               <tr className="text-xs text-gray-400 dark:text-gray-600 uppercase tracking-wide border-b border-gray-100 dark:border-gray-800/50">
                 <th className="text-left px-4 py-2.5 font-medium">Symbol</th>
@@ -200,6 +214,7 @@ setItems(data)
                 <th className="text-right px-4 py-2.5 font-medium">Added</th>
                 <th className="text-right px-4 py-2.5 font-medium">Change</th>
                 <th className="text-right px-4 py-2.5 font-medium">Signal</th>
+                <th className="text-right px-4 py-2.5 font-medium">Score</th>
                 <th className="px-4 py-2.5" />
               </tr>
             </thead>
@@ -259,6 +274,25 @@ setItems(data)
                       ) : (
                         <span className="text-xs text-gray-300 dark:text-gray-700">—</span>
                       )}
+                    </td>
+                    <td className="text-right px-4 py-3">
+                      {(() => {
+                        const card = scores[item.symbol]
+                        if (card === undefined) return <span className="text-xs text-gray-300 dark:text-gray-700">…</span>
+                        if (!card) return <span className="text-xs text-gray-300 dark:text-gray-700">—</span>
+                        const { decision, pillar_total } = card
+                        const title = `${decision.action} — ${decision.rationale}\n${decision.framing}`
+                        return (
+                          <div className="flex flex-col items-end gap-0.5" title={title}>
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-bold whitespace-nowrap ${actionStyle(decision.action)}`}>
+                              {actionShortLabel(decision.action)}
+                            </span>
+                            <span className="text-xs text-gray-300 dark:text-gray-700 tabular-nums">
+                              {pillar_total > 0 ? '+' : ''}{pillar_total}
+                            </span>
+                          </div>
+                        )
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       <button

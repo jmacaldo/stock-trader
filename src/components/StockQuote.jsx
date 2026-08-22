@@ -3,6 +3,7 @@ import { fetchQuote } from '../api'
 import { formatAge } from '../time'
 
 const StockChart = lazy(() => import('./StockChart'))
+const ScoreCard = lazy(() => import('./ScoreCard'))
 
 const usd = (n) =>
   n == null ? '—' : n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
@@ -116,6 +117,14 @@ export default function StockQuote({ quote, onUpdate, onClose }) {
         </div>
       }>
         <StockChart symbol={quote.symbol} />
+      </Suspense>
+
+      <Suspense fallback={
+        <div className="border-t border-gray-100 dark:border-gray-800 pt-4 h-24 flex items-center justify-center">
+          <div className="w-4 h-4 border-2 border-gray-200 dark:border-gray-800 border-t-emerald-500 rounded-full animate-spin" />
+        </div>
+      }>
+        <ScoreCard symbol={quote.symbol} />
       </Suspense>
 
       <p className="text-xs text-gray-300 dark:text-gray-700 text-center">
