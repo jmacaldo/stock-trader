@@ -8,8 +8,23 @@ import { scoreSymbol } from './score'
 const TICKER_TTL = 60 * 60 * 1000 // 1h
 const MACRO_TTL = 4 * 60 * 60 * 1000 // 4h — shared regime score
 
-const tickerCache = new Map() // symbol -> { at, promise }
+// Closes are cached per symbol (the expensive part — a ~2y history fetch);
+// the decision cascade is cheap to recompute per call, which matters because
+// the same symbol is legitimately scored under different `holding` values
+// (flat in Watchlist/MarketMovers, held in Portfolio) and those produce
+// different decisions from the same indicators.
+const closesCache = new Map() // symbol -> { at, promise }
 let macroCache = null // { at, promise }
+
+function getCloses(symbol) {
+  const now = Date.now()
+  const cached = closesCache.get(symbol)
+  if (cached && now - cached.at < TICKER_TTL) return cached.promise
+
+  const promise = fetchDailyCloses(symbol).catch(() => null)
+  closesCache.set(symbol, { at: now, promise })
+  return promise
+}
 
 function getMacroScore() {
   const now = Date.now()
@@ -26,22 +41,12 @@ function getMacroScore() {
 
 // Returns a full scoreSymbol() card for `symbol`, or null if there isn't
 // enough price history to score it. `holding`: true | false | null.
-export function getTickerScore(symbol, { holding = null } = {}) {
-  const now = Date.now()
-  const cached = tickerCache.get(symbol)
-  if (cached && now - cached.at < TICKER_TTL) return cached.promise
-
-  const promise = Promise.all([fetchDailyCloses(symbol), getMacroScore()])
-    .then(([closes, macro]) => {
-      if (closes.length < 30) return null
-      return scoreSymbol(closes, {
-        symbol,
-        macroScore: macro?.pillarScore ?? null,
-        holding,
-      })
-    })
-    .catch(() => null)
-
-  tickerCache.set(symbol, { at: now, promise })
-  return promise
+export async function getTickerScore(symbol, { holding = null } = {}) {
+  const [closes, macro] = await Promise.all([getCloses(symbol), getMacroScore()])
+  if (!closes || closes.length < 30) return null
+  try {
+    return scoreSymbol(closes, { symbol, macroScore: macro?.pillarScore ?? null, holding })
+  } catch {
+    return null
+  }
 }

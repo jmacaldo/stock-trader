@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react'
 import { fetchQuote } from '../api'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../supabase'
 import { formatAge, useNow } from '../time'
-import { getTickerScore } from '../scoring/scoreCache'
-import { actionShortLabel, actionStyle } from '../scoring/actionStyles'
+import ScoreBadge from './ScoreBadge'
 
 const MOVERS_URL = `${SUPABASE_URL}/functions/v1/yahoo-movers`
 const AUTH = { Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
@@ -15,34 +14,6 @@ async function fetchMovers(count = 10) {
   const times = [...gainers, ...losers, ...(actives ?? [])].map((q) => q.regularMarketTime).filter(Boolean)
   const updatedAt = times.length ? new Date(Math.min(...times) * 1000) : new Date()
   return { gainers, losers, actives: actives ?? [], updatedAt }
-}
-
-function ScoreBadge({ symbol }) {
-  const [card, setCard] = useState(undefined)
-
-  useEffect(() => {
-    let cancelled = false
-    setCard(undefined)
-    getTickerScore(symbol).then((c) => { if (!cancelled) setCard(c) })
-    return () => { cancelled = true }
-  }, [symbol])
-
-  if (card === undefined) return <span className="text-gray-300 dark:text-gray-700 text-xs">…</span>
-  if (!card) return <span className="text-gray-300 dark:text-gray-700 text-xs">—</span>
-
-  const { decision, pillar_total } = card
-  const title = `${decision.action} — ${decision.rationale}\n${decision.framing}`
-
-  return (
-    <div className="flex flex-col items-end gap-0.5" title={title}>
-      <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-bold whitespace-nowrap ${actionStyle(decision.action)}`}>
-        {actionShortLabel(decision.action)}
-      </span>
-      <span className="text-xs text-gray-300 dark:text-gray-700 tabular-nums">
-        {pillar_total > 0 ? '+' : ''}{pillar_total}
-      </span>
-    </div>
-  )
 }
 
 function MoverRow({ q, selecting, onSelect }) {

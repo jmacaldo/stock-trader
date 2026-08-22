@@ -1,63 +1,11 @@
 import { useEffect, useState, useRef, Fragment } from 'react'
 import { useStore } from '../store'
 import { refreshPrices } from '../prices'
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../supabase'
 import { formatAge, useNow } from '../time'
-
-const QUOTES_URL = `${SUPABASE_URL}/functions/v1/yahoo-quotes`
-const AUTH = { Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
+import ScoreBadge from './ScoreBadge'
 
 const usd = (n) =>
   (n ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
-
-async function fetchEnriched(symbols) {
-  if (!symbols.length) return {}
-  try {
-    const res = await fetch(`${QUOTES_URL}?symbols=${symbols.join(',')}`, { headers: AUTH })
-    if (!res.ok) return {}
-    const { quotes } = await res.json()
-    return Object.fromEntries((quotes ?? []).map((q) => [q.symbol, q]))
-  } catch {
-    return {}
-  }
-}
-
-function computeSignal(q, { netInvested, netShares }) {
-  if (!q || !netShares) return null
-  const {
-    regularMarketPrice, regularMarketChangePercent,
-    regularMarketVolume, averageDailyVolume3Month,
-    regularMarketDayHigh, regularMarketDayLow,
-    fiftyTwoWeekHigh, fiftyTwoWeekLow,
-  } = q
-  if (!averageDailyVolume3Month || !regularMarketDayHigh || !regularMarketDayLow) return null
-
-  const relVol      = regularMarketVolume / averageDailyVolume3Month
-  const dayRange    = regularMarketDayHigh - regularMarketDayLow
-  const intradayPos = dayRange > 0 ? (regularMarketPrice - regularMarketDayLow) / dayRange : 0.5
-  const fiftyTwoRange = (fiftyTwoWeekHigh ?? 0) - (fiftyTwoWeekLow ?? 0)
-  const fiftyTwoPos = fiftyTwoRange > 0 ? (regularMarketPrice - fiftyTwoWeekLow) / fiftyTwoRange : 0.5
-  const changePct   = regularMarketChangePercent ?? 0
-  const totalReturn = netInvested > 0 ? ((regularMarketPrice * netShares - netInvested) / netInvested) * 100 : 0
-
-  if ((intradayPos <= 0.35 && relVol >= 2.0) || totalReturn <= -15 || (fiftyTwoPos <= 0.15 && changePct < 0))
-    return { signal: 'SELL', totalReturn }
-  if ((totalReturn >= 30 && intradayPos <= 0.50) || (fiftyTwoPos >= 0.90 && intradayPos <= 0.40))
-    return { signal: 'TRIM', totalReturn }
-  if (relVol >= 2.0 && intradayPos >= 0.65 && changePct > 0 && totalReturn > -5)
-    return { signal: 'ADD', totalReturn }
-  if (relVol >= 2.0 || Math.abs(changePct) > 3)
-    return { signal: 'WATCH', totalReturn }
-  return { signal: 'HOLD', totalReturn }
-}
-
-const SIGNAL_STYLES = {
-  ADD:  'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
-  HOLD: 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400',
-  SELL: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
-  TRIM: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
-  WATCH:'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
-}
 
 export default function Portfolio({ onValueChange }) {
   useNow()
@@ -84,14 +32,6 @@ export default function Portfolio({ onValueChange }) {
   onValueChangeRef.current = onValueChange
 
   const symbols = Object.keys(portfolio)
-  const [enrichedData, setEnrichedData] = useState({})
-
-  useEffect(() => {
-    if (!symbols.length) { setEnrichedData({}); return }
-    fetchEnriched(symbols).then(setEnrichedData)
-    const t = setInterval(() => fetchEnriched(symbols).then(setEnrichedData), 300_000)
-    return () => clearInterval(t)
-  }, [symbols.join(',')])
 
   useEffect(() => {
     if (!symbols.length) {
@@ -219,7 +159,6 @@ export default function Portfolio({ onValueChange }) {
           </thead>
           <tbody>
             {rows.map(({ sym, shares, avgCost, name, current, value, cost, pnl, pnlPct }) => {
-              const sig = computeSignal(enrichedData[sym], { netInvested: shares * avgCost, netShares: shares })
               return (
                 <Fragment key={sym}>
                 <tr className="border-t border-gray-100 dark:border-gray-800/40 hover:bg-gray-50 dark:hover:bg-gray-800/20 transition-colors">
@@ -231,18 +170,7 @@ export default function Portfolio({ onValueChange }) {
                   <td className="text-right px-4 py-3 text-gray-400 dark:text-gray-500 tabular-nums text-xs">{usd(avgCost)}</td>
                   <td className="text-right px-4 py-3 text-gray-700 dark:text-gray-200 tabular-nums font-medium">{usd(current)}</td>
                   <td className="text-right px-4 py-3">
-                    {sig ? (
-                      <div className="flex flex-col items-end gap-0.5">
-                        <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-bold ${SIGNAL_STYLES[sig.signal]}`}>
-                          {sig.signal}
-                        </span>
-                        <span className={`text-xs tabular-nums ${sig.totalReturn >= 0 ? 'text-emerald-500 dark:text-emerald-600' : 'text-red-500 dark:text-red-600'}`}>
-                          {sig.totalReturn >= 0 ? '+' : ''}{sig.totalReturn.toFixed(1)}%
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-gray-300 dark:text-gray-700">—</span>
-                    )}
+                    <ScoreBadge symbol={sym} holding={true} />
                   </td>
                   <td className="text-right px-4 py-3 text-gray-500 dark:text-gray-400 tabular-nums">{usd(cost)}</td>
                   <td className="text-right px-4 py-3 text-gray-900 dark:text-white tabular-nums font-semibold">{usd(value)}</td>
