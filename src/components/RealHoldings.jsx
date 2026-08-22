@@ -238,7 +238,7 @@ export default function RealHoldings({ onSummaryChange }) {
   // mathematically always ±100% and useless as a percentage.
   const positionMap = {}
   for (const t of transactions) {
-    if (!positionMap[t.symbol]) positionMap[t.symbol] = { shares: 0, name: t.name, netInvested: 0, costBasis: 0 }
+    if (!positionMap[t.symbol]) positionMap[t.symbol] = { shares: 0, name: t.name, netInvested: 0, costBasis: 0, proceeds: 0 }
     if (t.type === 'buy') {
       positionMap[t.symbol].shares += t.shares
       positionMap[t.symbol].netInvested += t.cashInvested
@@ -246,6 +246,7 @@ export default function RealHoldings({ onSummaryChange }) {
     } else {
       positionMap[t.symbol].shares -= t.shares
       positionMap[t.symbol].netInvested -= t.cashInvested
+      positionMap[t.symbol].proceeds += t.cashInvested
     }
   }
   const activePositions = Object.entries(positionMap)
@@ -399,7 +400,7 @@ export default function RealHoldings({ onSummaryChange }) {
     const pnlPct = pnl == null ? null
       : closed ? (p.costBasis > 0 ? (pnl / p.costBasis) * 100 : null)
       : (p.netInvested > 0 ? (pnl / p.netInvested) * 100 : null)
-    return { symbol, name: p.name, shares: p.shares, netInvested: p.netInvested, costBasis: p.costBasis, currentValue, pnl, pnlPct, closed }
+    return { symbol, name: p.name, shares: p.shares, netInvested: p.netInvested, costBasis: p.costBasis, proceeds: p.proceeds, currentValue, pnl, pnlPct, closed }
   })
   const allPositionsKey = Object.entries(positionMap)
     .map(([s, p]) => `${s}:${p.shares.toFixed(6)}:${p.netInvested.toFixed(2)}`)

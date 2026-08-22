@@ -74,10 +74,15 @@ export default function HoldingsSummary({ positions }) {
                     {p.name && <div className="text-xs text-gray-400 dark:text-gray-600 truncate max-w-[160px]">{p.name}</div>}
                   </td>
                   <td className="text-right px-4 py-3 tabular-nums text-gray-600 dark:text-gray-300">
-                    {usd(p.netInvested)}
+                    {usd(p.closed ? p.costBasis : p.netInvested)}
                   </td>
                   <td className="text-right px-4 py-3 tabular-nums text-gray-900 dark:text-white font-medium">
-                    {p.closed ? <span className="text-gray-300 dark:text-gray-700">—</span> : usd(p.currentValue)}
+                    {p.closed ? (
+                      <>
+                        <div>{usd(p.proceeds)}</div>
+                        <div className="text-xs font-normal text-gray-400 dark:text-gray-600">sold</div>
+                      </>
+                    ) : usd(p.currentValue)}
                   </td>
                   <td className={`text-right px-4 py-3 tabular-nums font-medium ${
                     p.pnl == null ? 'text-gray-300 dark:text-gray-700' : isUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
