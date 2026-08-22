@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { fetchQuote } from '../api'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../supabase'
 import { formatAge, useNow } from '../time'
+import { getTickerScore } from '../scoring/scoreCache'
+import { actionShortLabel, actionStyle } from '../scoring/actionStyles'
 
 const MOVERS_URL = `${SUPABASE_URL}/functions/v1/yahoo-movers`
 const AUTH = { Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
@@ -15,49 +17,30 @@ async function fetchMovers(count = 10) {
   return { gainers, losers, updatedAt }
 }
 
-function computeSignal(q) {
-  const { regularMarketVolume, averageDailyVolume3Month, regularMarketPrice,
-          regularMarketDayHigh, regularMarketDayLow, regularMarketChangePercent } = q
+function ScoreBadge({ symbol }) {
+  const [card, setCard] = useState(undefined)
 
-  if (!averageDailyVolume3Month || !regularMarketDayHigh || !regularMarketDayLow) return null
+  useEffect(() => {
+    let cancelled = false
+    setCard(undefined)
+    getTickerScore(symbol).then((c) => { if (!cancelled) setCard(c) })
+    return () => { cancelled = true }
+  }, [symbol])
 
-  const relVol       = regularMarketVolume / averageDailyVolume3Month
-  const dayRange     = regularMarketDayHigh - regularMarketDayLow
-  const intradayPos  = dayRange > 0 ? (regularMarketPrice - regularMarketDayLow) / dayRange : 0.5
-  const changePct    = regularMarketChangePercent ?? 0
+  if (card === undefined) return <span className="text-gray-300 dark:text-gray-700 text-xs">…</span>
+  if (!card) return <span className="text-gray-300 dark:text-gray-700 text-xs">—</span>
 
-  if (relVol >= 2.0 && intradayPos >= 0.65 && changePct > 0)  return 'BUY'
-  if (relVol >= 2.0 && intradayPos <= 0.35 && changePct > 0)  return 'SELL'
-  if (relVol >= 2.0 && intradayPos <= 0.35 && changePct < 0)  return 'SHORT'
-  if (relVol < 1.5 || (intradayPos > 0.35 && intradayPos < 0.65)) return 'AVOID'
-  if (relVol >= 2.0) return 'WATCH'
-  return 'WATCH'
-}
-
-const SIGNAL_STYLES = {
-  BUY:   'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400',
-  SELL:  'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
-  SHORT: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400',
-  AVOID: 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-600',
-  WATCH: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
-}
-
-function SignalBadge({ q }) {
-  const signal = computeSignal(q)
-  if (!signal) return <span className="text-gray-300 dark:text-gray-700 text-xs">—</span>
-
-  const relVol = q.averageDailyVolume3Month
-    ? (q.regularMarketVolume / q.averageDailyVolume3Month).toFixed(1)
-    : null
+  const { decision, pillar_total } = card
+  const title = `${decision.action} — ${decision.rationale}\n${decision.framing}`
 
   return (
-    <div className="flex flex-col items-end gap-0.5">
-      <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-bold ${SIGNAL_STYLES[signal]}`}>
-        {signal}
+    <div className="flex flex-col items-end gap-0.5" title={title}>
+      <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-bold whitespace-nowrap ${actionStyle(decision.action)}`}>
+        {actionShortLabel(decision.action)}
       </span>
-      {relVol && (
-        <span className="text-xs text-gray-300 dark:text-gray-700 tabular-nums">{relVol}×</span>
-      )}
+      <span className="text-xs text-gray-300 dark:text-gray-700 tabular-nums">
+        {pillar_total > 0 ? '+' : ''}{pillar_total}
+      </span>
     </div>
   )
 }
@@ -91,7 +74,7 @@ function MoverRow({ q, isLoss, selecting, onSelect }) {
         {changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}%
       </td>
       <td className="px-3 py-2.5 text-right">
-        <SignalBadge q={q} />
+        <ScoreBadge symbol={q.symbol} />
       </td>
     </tr>
   )
@@ -115,7 +98,7 @@ const THead = () => (
       <th className="text-right px-3 py-1.5 font-medium">Price</th>
       <th className="text-right px-3 py-1.5 font-medium">Change</th>
       <th className="text-right px-3 py-1.5 font-medium">%</th>
-      <th className="text-right px-3 py-1.5 font-medium">Signal</th>
+      <th className="text-right px-3 py-1.5 font-medium">Score</th>
     </tr>
   </thead>
 )
