@@ -4,6 +4,12 @@ const usd = (n) =>
 export default function HoldingsSummary({ positions }) {
   if (!positions?.length) return null
 
+  const totalInvested = positions.reduce((s, p) => s + p.netInvested, 0)
+  const totalValue = positions.reduce((s, p) => s + (p.currentValue ?? 0), 0)
+  const totalPnl = totalValue - totalInvested
+  const totalPnlPct = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0
+  const totalIsUp = totalPnl >= 0
+
   return (
     <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-800">
@@ -50,6 +56,23 @@ export default function HoldingsSummary({ positions }) {
               )
             })}
           </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/30">
+              <td className="px-4 py-2.5 text-xs text-gray-500 font-semibold uppercase tracking-wide">
+                Total · {positions.length} position{positions.length !== 1 ? 's' : ''}
+              </td>
+              <td className="text-right px-4 py-2.5 text-gray-700 dark:text-gray-300 font-bold tabular-nums text-sm">
+                {usd(totalInvested)}
+              </td>
+              <td className="text-right px-4 py-2.5 text-gray-900 dark:text-white font-bold tabular-nums text-sm">
+                {usd(totalValue)}
+              </td>
+              <td className={`text-right px-4 py-2.5 font-bold tabular-nums text-sm ${totalIsUp ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                <div>{totalIsUp ? '+' : ''}{usd(totalPnl)}</div>
+                <div className="text-xs font-medium opacity-70">{totalIsUp ? '+' : ''}{totalPnlPct.toFixed(2)}%</div>
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
