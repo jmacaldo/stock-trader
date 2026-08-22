@@ -201,41 +201,49 @@ export default function MarketMovers({ onSelect }) {
           <div className="w-5 h-5 border-2 border-gray-200 dark:border-gray-800 border-t-emerald-500 rounded-full animate-spin" />
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-gray-100 dark:divide-gray-800">
-          <div>
-            <ColHead label="Top Gainers" icon="▲" color="text-emerald-600 dark:text-emerald-400" />
-            <table className="w-full">
-              <THead />
-              <tbody>
-                {sorted(gainers, false).map((q) => (
-                  <MoverRow key={q.symbol} q={q} selecting={selecting} onSelect={handleSelect} />
-                ))}
-              </tbody>
-            </table>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-gray-100 dark:divide-gray-800">
+            <div>
+              <ColHead label="Top Gainers" icon="▲" color="text-emerald-600 dark:text-emerald-400" />
+              <div className="overflow-x-auto scrollbar-hide">
+                <table className="w-full min-w-[420px]">
+                  <THead />
+                  <tbody>
+                    {sorted(gainers, false).map((q) => (
+                      <MoverRow key={q.symbol} q={q} selecting={selecting} onSelect={handleSelect} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div>
+              <ColHead label="Top Losers" icon="▼" color="text-red-500 dark:text-red-400" />
+              <div className="overflow-x-auto scrollbar-hide">
+                <table className="w-full min-w-[420px]">
+                  <THead />
+                  <tbody>
+                    {sorted(losers, true).map((q) => (
+                      <MoverRow key={q.symbol} q={q} selecting={selecting} onSelect={handleSelect} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
-          <div>
-            <ColHead label="Top Losers" icon="▼" color="text-red-500 dark:text-red-400" />
-            <table className="w-full">
-              <THead />
-              <tbody>
-                {sorted(losers, true).map((q) => (
-                  <MoverRow key={q.symbol} q={q} selecting={selecting} onSelect={handleSelect} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div>
+          <div className="border-t border-gray-100 dark:border-gray-800">
             <ColHead label="Most Active" icon="⚡" color="text-blue-500 dark:text-blue-400" />
-            <table className="w-full">
-              <THead />
-              <tbody>
-                {actives.map((q) => (
-                  <MoverRow key={q.symbol} q={q} selecting={selecting} onSelect={handleSelect} />
-                ))}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto scrollbar-hide">
+              <table className="w-full min-w-[420px]">
+                <THead />
+                <tbody>
+                  {actives.map((q) => (
+                    <MoverRow key={q.symbol} q={q} selecting={selecting} onSelect={handleSelect} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   )
