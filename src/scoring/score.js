@@ -4,6 +4,38 @@
 // Converts the indicator stack into Trend / Momentum / Macro-Sentiment pillars
 // (each -2..+2) and applies a capital-rotation decision cascade: enter on
 // rebound -> ride -> exit on exhaustion -> wait for the next trigger.
+//
+// Findings from validating the exhaustion pillar (kept here since they inform
+// how much to trust it, not just how it's coded):
+//
+// - rsiTurn can never fire on the same bar as the gain that would put a symbol
+//   on a "top movers" screen. Proof: Wilder's RSI here uses exponential
+//   smoothing with no fixed-window dropout (avgGain = (avgGain*13 + g)/14).
+//   On any gain day (close[t] > close[t-1]), avgLoss shrinks by exactly 13/14
+//   while avgGain shrinks less (or grows), so the avgGain/avgLoss ratio
+//   strictly increases whenever avgLoss[t-1] > 0 — i.e. RSI[t] >= RSI[t-1] on
+//   any gain day. rsiTurn requires RSI[t] < RSI[t-1], which a gain day rules
+//   out. Confirmed empirically: 0/875, 0/2389, 0/2153 co-occurrences across
+//   three separate gainer-conditioned panels. Consequence: on the Market
+//   Movers path specifically, the exhaustion flag set is effectively 3 flags
+//   (macdShrink, %B, stretch), not 4 — nExh>=2 there means 2-of-3 available
+//   signal, vs 2-of-4 on Portfolio/Watchlist/Scanner (any day, rsiTurn can
+//   fire). Same nominal threshold, different effective stringency by path —
+//   left as-is, flagged for whoever revisits this.
+//
+// - The exhaustion pillar (EXIT/TRIM, WAIT_FOR_PULLBACK) is UNVALIDATED.
+//   Backtested forward returns (ret3/5/10/20) for nExh>=2 and every individual
+//   exhaustion flag, across 3 universes (mega-cap, momentum-selected small-cap,
+//   and a momentum-agnostic small-cap sample) and 3 conditioning rules
+//   (>=5%, >=10%, rank-based top-10/day) — 18 ticker-block-bootstrapped
+//   comparisons, 0 of 18 excluded zero at 95% CI. Effect sizes were small
+//   relative to small-cap return variance (SD ~25-60% at 20 bars) and signs
+//   flipped across universe constructions, meaning the null is a real "not
+//   enough signal to distinguish from noise" rather than "proven no edge" —
+//   underpowered, not negative. Treat exhaustion verdicts as a description of
+//   the technical condition (see decide()'s framing), not a validated signal
+//   to act on. Revisit once the signal_log table (see scoreCache.js) has
+//   accumulated real forward-return data across 200+ distinct tickers.
 import * as I from './indicators.js'
 
 // Pillar 1: Trend (EMA structure + price position + long-term slope)
@@ -50,7 +82,7 @@ function scoreMomentum(ind) {
   return { score, detail: bits.join(', ') }
 }
 
-function computeFlags(ind) {
+export function computeFlags(ind) {
   const c = ind.close
   const { ema20: e20, ema50: e50, ema200: e200, ema200_slope: s200 } = ind
   const rsi = ind.rsi14, rsiPrev = ind.rsi14_prev
@@ -61,19 +93,32 @@ function computeFlags(ind) {
 
   const exhaustion = [], bearish = [], rebound = []
 
-  // Bullish exhaustion
-  if (rsi != null && rsiPrev != null && rsi >= 70 && rsi < rsiPrev) {
+  // Bullish exhaustion. Kept as 4 independently-counted flags — an earlier
+  // version collapsed %B and stretch into one "EXTENSION" flag on the theory
+  // that they were collinear (measuring the same thing in different units),
+  // but that was measured, not assumed, and came back at 19.5% Jaccard: real
+  // correlation, far short of redundant. Reverted. A short-lived RSI-divergence
+  // flag and an RSI-turn/MACD-shrink down-weight were also tried and removed —
+  // see git history and the header comment above for why.
+  const rsiTurning = rsi != null && rsiPrev != null && rsi >= 70 && rsi < rsiPrev
+  if (rsiTurning) {
     exhaustion.push(`RSI turning from overbought (${rsiPrev.toFixed(0)}→${rsi.toFixed(0)})`)
   }
-  if (hist != null && histPrev != null && hist > 0 && hist < histPrev) {
+  const macdShrinking = hist != null && histPrev != null && hist > 0 && hist < histPrev
+  if (macdShrinking) {
     exhaustion.push('MACD histogram shrinking in positive territory')
   }
-  if (pb != null && pb >= 1.0) {
+  const atUpperBand = pb != null && pb >= 1.0
+  if (atUpperBand) {
     exhaustion.push('price at/above upper Bollinger Band (%B≥1)')
   }
-  if (stretch >= 0.10) {
+  const stretchedAboveEma20 = stretch >= 0.10
+  if (stretchedAboveEma20) {
     exhaustion.push(`price stretched ${(stretch * 100).toFixed(0)}% above EMA20`)
   }
+  // Exposed for the signal-log instrumentation (scoreCache.js) so it doesn't
+  // have to re-derive these by parsing the display strings above.
+  const raw = { rsiTurning, macdShrinking, atUpperBand, stretchedAboveEma20 }
 
   // Relentless bearish
   if (e50 && e200 && s200 != null && c < e50 && e50 < e200 && s200 < 0) {
@@ -109,14 +154,26 @@ function computeFlags(ind) {
 
   const deathCross = Boolean(e50 && e200 && e50 < e200 && c < e50)
 
-  return { exhaustion, bearish, rebound, death_cross: deathCross, stretch_pct: Math.round(stretch * 1000) / 10 }
+  return { exhaustion, raw, bearish, rebound, death_cross: deathCross, stretch_pct: Math.round(stretch * 1000) / 10 }
+}
+
+// Builds the badge/tooltip text for the exhaustion branches: state the
+// condition that fired, not a directive ("Extended: 12% above EMA20, at upper
+// band"), since the pillar behind it isn't validated to predict anything.
+function describeExtension(ind, f) {
+  const bits = []
+  if (f.raw.atUpperBand) bits.push('at upper band')
+  if (f.raw.stretchedAboveEma20) bits.push(`${Math.round(f.stretch_pct)}% above EMA20`)
+  if (f.raw.rsiTurning) bits.push('RSI rolling over')
+  if (f.raw.macdShrinking) bits.push('MACD momentum fading')
+  return `Extended: ${bits.join(', ')}`
 }
 
 // Decision cascade aligned to a capital-rotation style: enter on rebound -> ride
 // -> exit on exhaustion -> wait for next trigger. Accumulating positions is not
 // the default. A rebound inside a death-cross is a counter-trend TACTICAL
 // opportunity, not a new cycle.
-function decide(ind, trend, mom, macro, holding) {
+export function decide(ind, trend, mom, macro, holding) {
   const f = computeFlags(ind)
   const nExh = f.exhaustion.length, nBear = f.bearish.length, nReb = f.rebound.length
   const dc = f.death_cross
@@ -124,10 +181,20 @@ function decide(ind, trend, mom, macro, holding) {
 
   let action, rationale, framing
 
-  if (inPos && nExh >= 2) {
-    action = 'EXIT / TRIM'
-    rationale = 'Bullish momentum EXHAUSTED.'
-    framing = 'Partial or full exit: buying momentum is dying out. Rotate capital and flag for re-entry on the next rebound.'
+  // Exhaustion is a property of price action, not of position state: check it
+  // identically for both paths, before anything else. Previously only the
+  // held path checked it, so a flat, already-extended rebound would sail
+  // straight through to RE-ENTRY at the top of its move.
+  //
+  // The exhaustion pillar is unvalidated (see header comment) — these two
+  // branches describe the observed condition rather than assert an action.
+  // Badges/tooltips should show `rationale` here, not a directive verb.
+  if (nExh >= 2) {
+    action = inPos ? 'EXIT / TRIM' : 'WAIT_FOR_PULLBACK'
+    rationale = describeExtension(ind, f)
+    framing = inPos
+      ? 'Extension flags fired, which historically hasn\'t shown a validated forward edge in either direction here — a reason to look closer, not a signal to act on alone. Rotate capital only if you have other confirmation.'
+      : 'Extension flags fired on a symbol you don\'t hold — chasing an already-extended move is poor R/R regardless, but this specific combination hasn\'t been shown to predict a pullback. Treat as a caution, not a rule.'
   } else if (inPos && (nBear >= 3 || (dc && nBear >= 2))) {
     action = 'EXIT'
     rationale = 'Bearish momentum RELENTLESS.'

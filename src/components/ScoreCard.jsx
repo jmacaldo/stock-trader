@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getTickerScore } from '../scoring/scoreCache'
-import { actionShortLabel, actionStyle, pillarColor } from '../scoring/actionStyles'
+import { badgeLabel, actionStyle, pillarColor } from '../scoring/actionStyles'
 
 function Pillar({ label, score, detail }) {
   return (
@@ -70,10 +70,12 @@ export default function ScoreCard({ symbol }) {
 
       <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 space-y-1.5">
         <div className="flex items-center gap-2">
-          <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold whitespace-nowrap ${actionStyle(decision.action)}`}>
-            {actionShortLabel(decision.action)}
+          <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${actionStyle(decision.action)}`}>
+            {badgeLabel(decision)}
           </span>
-          <span className="text-xs text-gray-500 dark:text-gray-400">{decision.rationale}</span>
+          {badgeLabel(decision) !== decision.rationale && (
+            <span className="text-xs text-gray-500 dark:text-gray-400">{decision.rationale}</span>
+          )}
         </div>
         <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">{decision.framing}</p>
         <FlagList label="Exhaustion" items={decision.flags.exhaustion} tone="text-amber-600 dark:text-amber-400" />

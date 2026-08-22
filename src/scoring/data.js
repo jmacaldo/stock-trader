@@ -3,6 +3,16 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../supabase'
 const CHART_PROXY = `${SUPABASE_URL}/functions/v1/yahoo-chart`
 const AUTH = { Authorization: `Bearer ${SUPABASE_ANON_KEY}` }
 
+// Known landmine: Yahoo (and ticker symbols generally) can silently reassign a
+// symbol to an unrelated company after the original is delisted/bankrupt/
+// acquired-for-parts — e.g. BBBY resolved to Overstock's post-acquisition
+// entity, not the original Bed Bath & Beyond, after the original delisted.
+// A truly-delisted symbol (e.g. SIVB after the Silicon Valley Bank collapse)
+// 404s cleanly, which is the safe failure mode — the dangerous one is a
+// *reused* symbol returning real, current data for a different company under
+// the old name. Nothing here currently detects that; a stale watchlist/
+// portfolio symbol could silently score/chart the wrong company.
+
 // ~2y of daily bars comfortably covers EMA200 warmup + slope lookback
 // (indicators.py recommends >=220 bars, ideally ~290).
 export async function fetchDailyCloses(symbol, range = '2y') {
