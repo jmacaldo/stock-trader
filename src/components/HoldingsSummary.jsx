@@ -1,3 +1,5 @@
+import ScoreBadge from './ScoreBadge'
+
 const usd = (n) =>
   n == null ? '—' : n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 })
 
@@ -20,6 +22,7 @@ function TotalRow({ label, invested, value, pnl, pnlPct, border }) {
         <div>{isUp ? '+' : ''}{usd(pnl)}</div>
         <div className="text-xs font-medium opacity-70">{isUp ? '+' : ''}{pnlPct.toFixed(2)}%</div>
       </td>
+      <td />
     </tr>
   )
 }
@@ -48,13 +51,14 @@ export default function HoldingsSummary({ positions }) {
         <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Positions</h2>
       </div>
       <div className="overflow-x-auto scrollbar-hide">
-        <table className="w-full text-sm min-w-[560px]">
+        <table className="w-full text-sm min-w-[660px]">
           <thead>
             <tr className="text-xs text-gray-400 dark:text-gray-600 uppercase tracking-wide border-b border-gray-100 dark:border-gray-800/50">
               <th className="text-left px-4 py-2.5 font-medium">Symbol</th>
               <th className="text-right px-4 py-2.5 font-medium">Cash Invested</th>
               <th className="text-right px-4 py-2.5 font-medium">Value Now</th>
               <th className="text-right px-4 py-2.5 font-medium">P&amp;L</th>
+              <th className="text-right px-4 py-2.5 font-medium">Score</th>
             </tr>
           </thead>
           <tbody>
@@ -95,6 +99,9 @@ export default function HoldingsSummary({ positions }) {
                         </div>
                       </>
                     )}
+                  </td>
+                  <td className="text-right px-4 py-3">
+                    <ScoreBadge symbol={p.symbol} holding={p.closed ? null : true} />
                   </td>
                 </tr>
               )
